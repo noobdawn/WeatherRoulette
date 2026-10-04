@@ -1,5 +1,12 @@
 name: Deploy to GitHub Pages
 
+# 部署方式：自定义 GitHub Actions 工作流（不是「分支部署」）。
+# 对应的是仓库 Settings → Pages → Build and deployment → Source 选择 "GitHub Actions"。
+# 版本按官方文档选用（2026-10 核对）：
+#   actions/checkout@v4 · actions/configure-pages@v5
+#   actions/upload-pages-artifact@v4 · actions/deploy-pages@v4
+#   （upload-pages-artifact v3 已被弃用，会直接导致构建失败）
+
 on:
   push:
     branches: [main]
@@ -30,15 +37,18 @@ jobs:
           test -f data/cities.json
           test -f assets/audio/manifest.json
           test -f assets/images/manifest.json
-          COUNT=$(ls assets/audio/zh/city/*.mp3 | wc -l)
-          echo "城市语音片段：$COUNT 个"
-          test "$COUNT" -ge 81
+          test -f assets/images/luminance.json
+          CITY=$(ls assets/audio/zh/city/*.mp3 | wc -l)
+          NUM=$(ls assets/audio/zh/num/*.mp3 | wc -l)
+          echo "城市语音片段：$CITY 个；数字片段：$NUM 个"
+          test "$CITY" -ge 81
+          test "$NUM" -ge 43
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: .
 
@@ -52,3 +62,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+

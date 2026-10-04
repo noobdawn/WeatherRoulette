@@ -591,7 +591,8 @@ async function main() {
   if (new URLSearchParams(location.search).get('e2e') === '1') {
     const failLines = lines.filter((l) => /^FAIL|^EXCEPTION/.test(l)).slice(0, 4).join(' | ').slice(0, 400);
     const q = new URLSearchParams({ selftest: '1', pass: String(pass), fail: String(fail), detail: failLines });
-    fetch('/__selftest_beacon?' + q.toString()).catch(() => {});
+    // 相对路径：这样自测页放在任意子路径下（如 GitHub Pages 的 /WeatherRoulette/tests/）都能回传
+    fetch('__selftest_beacon?' + q.toString()).catch(() => {});
   }
 }
 
