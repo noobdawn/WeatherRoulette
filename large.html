@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>天气播报 · 大屏版 | Weather Roulette</title>
+<meta name="description" content="整屏单城的大字号天气播报，中英对照，适合投屏、平板与电视给孩子看。">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="large.css">
+</head>
+<body>
+<!-- 大屏版（LargeScreen）：与小卡片版 index.html 完全独立的页面，共用 js/core/* 与 js/audio/* 契约模块。 -->
+<div id="large-app" data-weather="sun">
+
+  <!-- 全屏城市壁纸：两张 img 交叉淡入 -->
+  <div id="lg-bg" aria-hidden="true">
+    <img id="lg-bg-a" class="lg-bg-img is-active" alt="" decoding="async">
+    <img id="lg-bg-b" class="lg-bg-img" alt="" decoding="async">
+    <div id="lg-bg-fallback"><span id="lg-bg-fallback-char">天</span></div>
+  </div>
+
+  <!-- 天气氛围层：雨/雪/雷闪/雾/阳光，纯 CSS -->
+  <div id="lg-scene" aria-hidden="true"></div>
+
+  <header id="lg-topbar">
+    <span id="lg-day" class="lg-pill">
+      <span class="lg-zh" id="lg-day-zh">今天</span>
+      <span class="lg-en" id="lg-day-en">Today</span>
+    </span>
+    <a id="lg-home" href="index.html" aria-label="返回小卡片版">← 小卡片版<span class="lg-en">Small</span></a>
+  </header>
+
+  <main id="lg-stage" aria-live="polite">
+    <h1 id="lg-city-zh"></h1>
+    <p id="lg-city-en"></p>
+
+    <div id="lg-weather-row">
+      <div id="lg-weather-icon" aria-hidden="true"></div>
+      <div class="lg-weather-text">
+        <span id="lg-weather-zh"></span>
+        <span id="lg-weather-en"></span>
+      </div>
+    </div>
+
+    <div id="lg-temp-row">
+      <span class="lg-temp-block">
+        <span class="lg-temp-num" id="lg-temp-c">--</span><span class="lg-temp-unit">°C</span>
+      </span>
+      <span class="lg-temp-sep" aria-hidden="true">/</span>
+      <span class="lg-temp-block lg-temp-block-f">
+        <span class="lg-temp-num" id="lg-temp-f">--</span><span class="lg-temp-unit">°F</span>
+      </span>
+    </div>
+
+    <p id="lg-temp-note">
+      <span id="lg-temp-note-zh"></span>
+      <span id="lg-temp-note-en" class="lg-en"></span>
+    </p>
+
+    <div id="lg-meta-row">
+      <span class="lg-pill" id="lg-local-time">
+        <span class="lg-zh" id="lg-local-time-zh"></span>
+        <span class="lg-en" id="lg-local-time-en"></span>
+      </span>
+      <span class="lg-pill" id="lg-precip">
+        <span class="lg-zh" id="lg-precip-zh"></span>
+        <span class="lg-en" id="lg-precip-en"></span>
+      </span>
+      <span class="lg-pill" id="lg-wind">
+        <span class="lg-zh" id="lg-wind-zh"></span>
+        <span class="lg-en" id="lg-wind-en"></span>
+      </span>
+    </div>
+  </main>
+
+  <footer id="lg-hud">
+    <div id="lg-dots" aria-hidden="true"></div>
+    <div id="lg-hud-row">
+      <span id="lg-progress-text"></span>
+      <div id="lg-buttons">
+        <button id="lg-btn-prev" type="button" aria-label="上一个城市">⏮</button>
+        <button id="lg-btn-play" type="button" aria-label="暂停或继续" aria-pressed="false">⏸</button>
+        <button id="lg-btn-next" type="button" aria-label="下一个城市">⏭</button>
+        <button id="lg-btn-music" type="button" aria-label="背景音乐开关" aria-pressed="false">🎵</button>
+        <button id="lg-btn-shuffle" type="button" aria-label="重新随机排序">🔀</button>
+      </div>
+      <span id="lg-status" role="status"></span>
+    </div>
+  </footer>
+
+  <!-- 左右半屏点击提示（纯装饰，pointer-events:none） -->
+  <div id="lg-arrows" aria-hidden="true">
+    <span class="lg-arrow">‹</span>
+    <span class="lg-arrow">›</span>
+  </div>
+
+  <!-- 必须由用户点一下才能解锁音频（浏览器 autoplay 限制） -->
+  <div id="lg-start-overlay">
+    <div class="lg-start-panel">
+      <div class="lg-start-title">天气播报</div>
+      <div class="lg-start-sub">Weather Roulette · 大屏版 Large Screen</div>
+      <button id="lg-btn-start" type="button">▶ 开始播报<span class="lg-en">Start</span></button>
+      <p id="lg-start-hint"></p>
+    </div>
+  </div>
+
+</div>
+<noscript>
+  <p style="color:#fff;font:600 20px/1.6 system-ui,sans-serif;padding:24px">
+    需要开启 JavaScript 才能播放天气播报。 / JavaScript is required.
+  </p>
+</noscript>
+<script type="module" src="js/large-main.js"></script>
+</body>
+</html>

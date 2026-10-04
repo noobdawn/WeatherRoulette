@@ -1,0 +1,807 @@
+/* ============================================================================
+   WeatherRoulette · style.css —— 极简版
+   整屏只有两层：一张满屏城市壁纸 + 居中大字前景。没有蒙版、没有玻璃面板、
+   没有进度条、没有播放控制条，也没有华氏度 / 当地时间 / 降水 / 风速。
+
+   改动前请先读这四条硬约束：
+   1) 不加任何覆盖全屏的暗色遮罩。#bg::after 只剩「四角极轻 vignette」，中线完全透明。
+   2) 字号：1440x900 桌面端 #city-zh ≥ 96px；375x812 手机竖屏 ≥ 48px 且不换行不溢出。
+      全部走 clamp() 且都有上下限。
+   3) 文字颜色自动适配壁纸：screen.js 在 #app 上写 data-text-on="dark|light"，
+      本文件用两套 CSS 变量（--fg-1/--fg-2/--fg-shadow）覆盖（见第 2 节）。
+   4) DOM 契约写在 index.html。这些 id 不能删：城市/天气/温度文本、
+      #card（入场动画）、#weather-icon（图标容器）、#btn-music（音乐开关）、
+      #start-overlay（音频解锁）、#sr-only-status（隐藏状态位）。
+
+   天气主题：#app 的 data-weather="<icon 键>"，13 个键仍有独立配色，只用于
+   开始遮罩里的按钮与「图片全失败」时的插画兜底，壁纸本身不受影响。
+   图标动画：.wi-* 的 keyframes 由 js/ui/weather-icon.js 自注入，本文件只管尺寸。
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- 0. 基础 */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  height: 100%;
+  overflow: hidden;                 /* 单屏播报：任何视口都不出现滚动条 */
+  background: #070b16;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #070b16;
+  color: var(--fg-1);
+  font-family: var(--font-cn);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+img { display: block; }
+
+button {
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ------------------------------------------- 1. 令牌：字体栈 / 字号 / 圆角 */
+
+:root {
+  /* 字体栈：全部系统字体，不引外链字体（GitHub Pages 直出） */
+  --font-cn: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC',
+             'Source Han Sans SC', 'Heiti SC', 'WenQuanYi Micro Hei', sans-serif;
+  --font-en: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-num: 'Arial Rounded MT Bold', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-emoji: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji',
+                'Segoe UI Symbol', sans-serif;
+
+  /* 字号：clamp(最小, 流体, 最大) —— 每个都有上下限，极端视口不会崩 */
+  --fs-city-zh: clamp(52px, 14.5vw, 128px);   /* 375→54.4  1440→128  (≥48 / ≥96) */
+  --fs-city-en: clamp(21px, 3.4vw, 48px);     /* 375→21    1440→48 */
+  --fs-temp: clamp(84px, 12vw, 168px);        /* 主温度数字（≥48） */
+  --fs-weather-zh: clamp(30px, 4.4vw, 68px);
+  --fs-weather-en: clamp(18px, 2.2vw, 34px);
+  --wi-size: clamp(80px, 9.5vw, 150px);       /* 天气图标方框 */
+  --gap-card: clamp(6px, 1.6vh, 24px);
+
+  --radius-chip: 999px;
+
+  /* 文字色默认值 = 「暗壁纸」那套（index.html 初值 data-text-on="dark"）。
+     真正的两套定义见第 2 节 #app[data-text-on='…']。 */
+  --fg-1: #ffffff;
+  --fg-2: #ffffff;
+  --pause-halo: rgba(3, 6, 16, 0.75);
+  --fg-shadow:
+    0 1px 2px rgba(3, 6, 16, 0.62),
+    0 0 3px rgba(3, 6, 16, 0.55),
+    0 2px 10px rgba(3, 6, 16, 0.55),
+    0 6px 28px rgba(3, 6, 16, 0.50);
+}
+
+/* ============================================================== 2. 文字配色
+   screen.js 探测壁纸中心亮度后写 data-text-on，两套变量在这里切换。
+   对比度（WCAG 2.1，相对亮度 L，纯色最坏情况，实测见下）：
+     · 白字 #fff：背景 L ≤ 0.183 时 ≥ 4.5:1。对应当前 screen.js 的阈值（亮度 0.45
+       ≈ L 0.171）→ 4.59:1 ✓，越暗越安全。
+     · 墨色 #000（L=0）：背景 L ≥ 0.178 时 ≥ 4.5:1（亮度 ≥ 0.4555）。
+   ⚠ 两个分支的"安全区"在亮度 0.4555~0.4652 之间接上；也就是说 screen.js 的
+     LIGHT_BG_THRESHOLD 只有落在这一区间才能让两边都严格 ≥4.5:1（推荐 0.46）。
+     阈值 0.45 时亮底分支最多 4.42:1，任何文字色都做不到 4.5 —— 已用真实截图实测。
+     因此亮底墨色压到纯黑，并且**不用半透明次级色**：
+     白字 92% 不透明度在阈值背景上只剩 4.17:1（实测）。
+   --fg-shadow 是多层柔和 halo：第一层紧贴字形（0 0 3px）把字形周边局部亮度拉向文字色，
+   第二、三层是大范围投影，让大字在杂乱照片上依然"浮"得起来。不是生硬描边。 */
+
+/* 壁纸偏暗 → 白色系 + 深色内嵌 halo
+   说明：halo 的第一层必须是「紧贴字形的实心描边」（0 0 1px / 0 0 2px + 高 alpha）。
+   实测把 halo 拉稀（0 0 3px + 0.55 alpha）是兜不住可读性的：模糊半径一大，
+   光晕就与背景混色，等于没有垫层。多层从紧到松、由实到虚，既有文字垫层又不糊住壁纸。 */
+#app[data-text-on='dark'] {
+  --fg-1: #ffffff;
+  --fg-2: #ffffff;                  /* 不用半透明：0.92 alpha 在阈值背景上掉到 4.17:1 */
+  --pause-halo: rgba(3, 6, 16, 0.75);
+  --fg-shadow:
+    0 0 1px rgba(2, 5, 14, 0.96),
+    0 1px 2px rgba(2, 5, 14, 0.92),
+    0 2px 5px rgba(2, 5, 14, 0.80),
+    0 4px 16px rgba(2, 5, 14, 0.55),
+    0 10px 34px rgba(2, 5, 14, 0.40);
+}
+
+/* 壁纸偏亮 → 深墨色系 + 白色内嵌 halo（同理，第一层是紧贴字形的实心白边） */
+#app[data-text-on='light'] {
+  --fg-1: #000000;                  /* 亮底分支要拿满对比度，只能压到纯黑（#02030a 实测差 0.03） */
+  --fg-2: #000000;
+  --pause-halo: rgba(255, 255, 255, 0.95);
+  --fg-shadow:
+    0 0 1px rgba(255, 255, 255, 0.98),
+    0 1px 2px rgba(255, 255, 255, 0.95),
+    0 2px 5px rgba(255, 255, 255, 0.85),
+    0 4px 16px rgba(255, 255, 255, 0.60),
+    0 10px 34px rgba(255, 255, 255, 0.45);
+}
+
+/* 采样失败的兜底：screen.js 读不到跨域像素时会加 data-contrast-fallback="1"，
+   此时不知道壁纸明暗，只能把 halo 加重一档，尽量在任意背景上保住可读性。 */
+#app[data-contrast-fallback][data-text-on='dark'] {
+  --fg-shadow:
+    0 1px 2px rgba(3, 6, 16, 0.78),
+    0 0 3px rgba(3, 6, 16, 0.74),
+    0 2px 12px rgba(3, 6, 16, 0.68),
+    0 8px 34px rgba(3, 6, 16, 0.58);
+}
+
+#app[data-contrast-fallback][data-text-on='light'] {
+  --fg-shadow:
+    0 1px 1px rgba(255, 255, 255, 0.98),
+    0 0 3px rgba(255, 255, 255, 0.96),
+    0 2px 14px rgba(255, 255, 255, 0.86),
+    0 8px 34px rgba(255, 255, 255, 0.66);
+}
+
+/* ------------------------------ 3. 天气色彩主题（13 个 icon 键，仅按钮/兜底用） */
+/* 晴=暖橙黄 多云=暖黄+亮蓝 阴=灰蓝 雾=青灰 雨=蓝 阵雨=青蓝 雷=紫灰 雪=冰蓝 */
+
+#app {
+  --c-accent: #ffce4d;
+  --c-accent-2: #ff8f1f;
+  --c-accent-ink: #3d2100;          /* 强调底色上的文字色（保证对比度） */
+  --c-scene-1: rgba(255, 198, 64, 0.32);
+  --c-scene-2: rgba(255, 120, 40, 0.20);
+}
+
+#app[data-weather='sun'] {
+  --c-accent: #ffce4d;
+  --c-accent-2: #ff8f1f;
+  --c-accent-ink: #3d2100;
+  --c-scene-1: rgba(255, 198, 64, 0.32);
+  --c-scene-2: rgba(255, 120, 40, 0.20);
+}
+
+#app[data-weather='cloud-sun'] {
+  --c-accent: #ffd97d;
+  --c-accent-2: #7fb6ff;
+  --c-accent-ink: #14233d;
+  --c-scene-1: rgba(255, 214, 120, 0.30);
+  --c-scene-2: rgba(120, 170, 255, 0.24);
+}
+
+#app[data-weather='cloud'] {
+  --c-accent: #cdd8e8;
+  --c-accent-2: #8b9dbb;
+  --c-accent-ink: #1b2437;
+  --c-scene-1: rgba(190, 205, 225, 0.24);
+  --c-scene-2: rgba(120, 140, 175, 0.20);
+}
+
+#app[data-weather='fog'] {
+  --c-accent: #d7e3e2;
+  --c-accent-2: #9fb0b4;
+  --c-accent-ink: #1d2728;
+  --c-scene-1: rgba(220, 232, 232, 0.26);
+  --c-scene-2: rgba(140, 160, 165, 0.20);
+}
+
+#app[data-weather='rain-light'] {
+  --c-accent: #a8d6ff;
+  --c-accent-2: #4f9ae0;
+  --c-accent-ink: #0d2136;
+  --c-scene-1: rgba(168, 214, 255, 0.26);
+  --c-scene-2: rgba(70, 140, 220, 0.22);
+}
+
+#app[data-weather='rain'] {
+  --c-accent: #7cbcff;
+  --c-accent-2: #2f74c0;
+  --c-accent-ink: #06192e;
+  --c-scene-1: rgba(140, 195, 255, 0.26);
+  --c-scene-2: rgba(50, 115, 195, 0.24);
+}
+
+#app[data-weather='rain-heavy'] {
+  --c-accent: #5aa2f0;
+  --c-accent-2: #1f4f92;
+  --c-accent-ink: #02101f;
+  --c-scene-1: rgba(110, 170, 240, 0.26);
+  --c-scene-2: rgba(35, 85, 160, 0.26);
+}
+
+#app[data-weather='shower'] {
+  --c-accent: #8fe3f0;
+  --c-accent-2: #2f9fc4;
+  --c-accent-ink: #052730;
+  --c-scene-1: rgba(143, 227, 240, 0.26);
+  --c-scene-2: rgba(45, 155, 195, 0.22);
+}
+
+#app[data-weather='thunder'] {
+  --c-accent: #b3a5ef;
+  --c-accent-2: #574d84;
+  --c-accent-ink: #16122b;
+  --c-scene-1: rgba(150, 130, 235, 0.30);
+  --c-scene-2: rgba(80, 70, 120, 0.24);
+}
+
+#app[data-weather='sleet'] {
+  --c-accent: #cfe6f7;
+  --c-accent-2: #7ea3c8;
+  --c-accent-ink: #10202f;
+  --c-scene-1: rgba(207, 230, 247, 0.26);
+  --c-scene-2: rgba(120, 160, 200, 0.20);
+}
+
+#app[data-weather='snow-light'] {
+  --c-accent: #e6f4ff;
+  --c-accent-2: #a8d4f5;
+  --c-accent-ink: #10202f;
+  --c-scene-1: rgba(230, 244, 255, 0.30);
+  --c-scene-2: rgba(150, 200, 245, 0.22);
+}
+
+#app[data-weather='snow'] {
+  --c-accent: #d3ecff;
+  --c-accent-2: #86bdea;
+  --c-accent-ink: #0d2136;
+  --c-scene-1: rgba(211, 236, 255, 0.28);
+  --c-scene-2: rgba(120, 180, 230, 0.22);
+}
+
+#app[data-weather='snow-heavy'] {
+  --c-accent: #bde0ff;
+  --c-accent-2: #5f9dd6;
+  --c-accent-ink: #08192b;
+  --c-scene-1: rgba(189, 224, 255, 0.30);
+  --c-scene-2: rgba(90, 150, 210, 0.24);
+}
+
+/* ------------------------------------------------------------- 4. 页面骨架 */
+/* 单层网格：前景 #card 居中；背景、兜底层、音乐键、开始遮罩都是绝对定位，不参与布局 */
+
+#app {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  font-family: var(--font-cn);
+  color: var(--fg-1);
+}
+
+/* ------------------------------------------------------ 5. 背景照片 + 微角 */
+/* 没有整屏蒙版：壁纸原样全可见。唯一的 #bg::after 是"四角极轻 vignette"，
+   中心 58% 完全透明（中线绝不压暗），四角最深也只有 0.22 透明度。 */
+
+#bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: linear-gradient(160deg, #0b1226, #060a18);
+}
+
+.bg-img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;                          /* 高于 screen.js 的 #bg-fallback(z-index:0)，照片永远压过插画 */
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transition: opacity 900ms ease;      /* 交叉淡入：契约要求 900ms */
+}
+
+.bg-img.is-active { opacity: 1; }
+
+#bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(122% 122% at 50% 50%,
+      rgba(3, 6, 16, 0) 0%,
+      rgba(3, 6, 16, 0) 58%,
+      rgba(3, 6, 16, 0.10) 80%,
+      rgba(3, 6, 16, 0.22) 100%);
+}
+
+/* ------------------------------------------------- 6. 插画兜底层（极少用到） */
+/* 有照片时必须完全不可见：screen.js 加载成功后会摘掉 .is-fallback。
+   图片全失败时，用渐变 + 城市首字兜底，绝不留白。 */
+
+#bg-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  font-family: var(--font-cn);
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  transition: opacity 420ms ease, visibility 420ms ease;
+}
+
+#bg-scene.is-fallback {
+  opacity: 1;
+  visibility: visible;
+  background-image:
+    radial-gradient(70% 55% at 50% 0%, var(--c-scene-1), transparent 70%),
+    linear-gradient(160deg, var(--c-accent) 0%, var(--c-accent-2) 52%, rgba(5, 9, 22, 0.94) 100%);
+}
+
+#bg-scene.is-fallback::after {
+  content: attr(data-char);
+  font-size: clamp(140px, 34vw, 460px);
+  color: rgba(255, 255, 255, 0.22);
+}
+
+#app.is-night #bg-scene.is-fallback {
+  background-image:
+    radial-gradient(70% 55% at 50% 0%, var(--c-scene-1), transparent 70%),
+    linear-gradient(160deg, var(--c-accent-2) 0%, rgba(9, 13, 30, 0.96) 55%, rgba(3, 5, 14, 1) 100%);
+}
+
+/* ------------------------------------------------------- 7. 前景：居中大字 */
+/* #card 只是居中容器：没有底色、没有边框、没有模糊、没有面板阴影，文字直接压在照片上。
+   id 保留是因为 screen.js 每张卡片都会重播 .is-entering 入场动画。 */
+
+#card {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-card);
+  max-width: 100%;
+  max-height: 100%;
+  padding: clamp(10px, 2.4vh, 28px) clamp(12px, 3.4vw, 40px);
+  text-align: center;
+  animation: none;
+}
+
+#card.is-entering {
+  animation: card-in 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 城市中文名：超大、不换行 */
+#city-zh {
+  margin: 0;
+  font-size: var(--fs-city-zh);
+  font-weight: 900;
+  line-height: 1.04;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  max-width: 100%;
+  color: var(--fg-1);
+  text-shadow: var(--fg-shadow);
+}
+
+/* 城市英文名 */
+#city-en {
+  margin: 0;
+  font-family: var(--font-en);
+  font-size: var(--fs-city-en);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  max-width: 100%;
+  color: var(--fg-2);
+  text-shadow: var(--fg-shadow);
+}
+
+/* 天气：图标 + 中文词 + 英文词 */
+#weather-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vw, 28px);
+  max-width: 100%;
+}
+
+#weather-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--wi-size);
+  height: var(--wi-size);
+  filter: drop-shadow(0 10px 20px rgba(3, 8, 22, 0.45));
+}
+
+#weather-icon > svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+/* 图标模块不可用时的 emoji 兜底（screen.js 会插入 span.icon-fallback） */
+#weather-icon > .icon-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-emoji);
+  font-size: calc(var(--wi-size) * 0.72);
+  line-height: 1;
+}
+
+.weather-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.12em;
+  text-align: left;
+}
+
+#weather-zh {
+  font-size: var(--fs-weather-zh);
+  font-weight: 900;
+  line-height: 1.06;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--fg-1);
+  text-shadow: var(--fg-shadow);
+}
+
+#weather-en {
+  font-family: var(--font-en);
+  font-size: var(--fs-weather-en);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  color: var(--fg-2);
+  text-shadow: var(--fg-shadow);
+}
+
+/* 温度：只有一个大号数字 + °C（华氏度已按极简要求删除） */
+#temp-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 1.6vw, 24px);
+  max-width: 100%;
+}
+
+#temp-c {
+  font-family: var(--font-num);
+  font-size: var(--fs-temp);
+  font-weight: 900;
+  line-height: 0.94;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  color: var(--fg-1);
+  text-shadow: var(--fg-shadow);
+}
+
+/* °C 单位（screen.js 写的是 <sup class="temp-unit">；其它写法也一并兼容） */
+#temp-c :is(.unit, .deg, .temp-unit, .c-unit, small, sup) {
+  font-size: 0.34em;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin-left: 0.06em;
+  vertical-align: 0.62em;
+}
+
+#temp-c sup { vertical-align: super; }
+
+/* 极简版不显示「最低~最高」区间。若 screen.js 之后要在卡片上显示区间，
+   删掉这条规则即可（它会以 --fg-2 的小字出现在温度右侧）。 */
+#temp-row > .temp-range { display: none; }
+
+/* 日期标签：DOM 里保留（screen.js 会写「今天 Today」，屏幕阅读器也能读到），
+   但极简版要求"只显示城市/天气/温度"，所以视觉上做成 sr-only。
+   如果要把它显示出来：删掉下面这条规则，再加一行小字样式即可。 */
+#card-day {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  color: var(--fg-1);
+  text-shadow: var(--fg-shadow);
+}
+
+/* JS 还没填内容时不显示空节点（避免预留空位 / 布局跳动） */
+#city-zh:empty,
+#city-en:empty,
+#weather-zh:empty,
+#weather-en:empty,
+#temp-row > span:empty,
+#start-hint:empty { visibility: hidden; }
+
+/* --------------------------------------------------- 8. 暂停：一个小图标 */
+/* 极简的暂停反馈：左上角一个纯 CSS 的 ⏸（两条竖杠），不做任何大遮罩。
+   screen.js 给 #app 加 .is-paused，main.js 给 body 加 .is-paused，两种都支持。 */
+
+#app.is-paused::after,
+body.is-paused #app::after {
+  content: '';
+  position: absolute;
+  top: calc(max(18px, env(safe-area-inset-top, 0px)));
+  left: calc(max(18px, env(safe-area-inset-left, 0px)));
+  z-index: 6;
+  width: clamp(16px, 1.6vw, 22px);
+  height: clamp(20px, 2vw, 28px);
+  background: linear-gradient(90deg,
+      currentColor 0 32%,
+      transparent 32% 68%,
+      currentColor 68% 100%);
+  color: var(--fg-1);
+  opacity: 0.85;
+  filter: drop-shadow(0 0 2px var(--pause-halo)) drop-shadow(0 2px 8px var(--pause-halo));
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------ 9. 音乐开关（角落） */
+/* 默认很淡，几乎不打扰；hover / focus / 点按时才到 1。无边框无底色，但热区 ≥56x56。 */
+
+#btn-music {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  right: max(8px, env(safe-area-inset-right, 0px));
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: #fff;
+  font-family: var(--font-emoji);
+  font-size: clamp(22px, 2.4vw, 30px);
+  line-height: 1;
+  opacity: 0.35;
+  cursor: pointer;
+  text-shadow: 0 2px 10px rgba(3, 6, 16, 0.7), 0 0 3px rgba(3, 6, 16, 0.5);
+  transition: opacity 220ms ease, transform 140ms ease;
+}
+
+@media (hover: hover) {
+  #btn-music:hover { opacity: 1; }
+}
+
+/* 触屏没有 hover：默认稍亮一点，手指按下时到 1 */
+@media (hover: none) {
+  #btn-music { opacity: 0.5; }
+}
+
+#btn-music:active { opacity: 1; transform: scale(0.94); }
+
+#btn-music:focus-visible {
+  opacity: 1;
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: 2px;
+}
+
+/* 静音状态（main.js 会加 .is-off；也兼容 is-muted 与 #app/body 上的状态类） */
+#btn-music.is-off,
+#btn-music.is-muted,
+#app.is-music-off #btn-music,
+body.is-music-off #btn-music {
+  opacity: 0.22;
+  filter: grayscale(1);
+}
+
+/* ------------------------------------------------------ 10. 开始播报遮罩 */
+/* 音频解锁必需，不可删。极简样式：整屏半透明深色，中间只有标题、按钮、一行提示，无卡片框。 */
+
+#start-overlay {
+  --ov-fg: #ffffff;
+  --ov-fg-2: rgba(255, 255, 255, 0.86);
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 4vw, 48px);
+  background: linear-gradient(180deg, rgba(5, 9, 20, 0.72), rgba(3, 6, 16, 0.82));
+  -webkit-backdrop-filter: blur(6px) saturate(1.04);
+  backdrop-filter: blur(6px) saturate(1.04);
+  text-align: center;
+  transition: opacity 400ms ease, visibility 400ms ease;
+}
+
+.start-panel {
+  display: grid;
+  justify-items: center;
+  gap: clamp(12px, 2.4vh, 26px);
+  width: min(92vw, 760px);
+}
+
+.start-title {
+  font-size: clamp(38px, 6.2vw, 84px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.08em;
+  color: var(--ov-fg);
+  text-shadow: 0 6px 24px rgba(2, 6, 18, 0.6);
+}
+
+.start-sub {
+  font-family: var(--font-en);
+  font-size: clamp(15px, 2vw, 28px);
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ov-fg-2);
+}
+
+#btn-start {
+  min-height: 84px;
+  min-width: 56px;
+  padding: 0.42em 1.3em;
+  border-radius: var(--radius-chip);
+  border: 3px solid rgba(255, 255, 255, 0.55);
+  background: linear-gradient(180deg, var(--c-accent), var(--c-accent-2));
+  color: var(--c-accent-ink);
+  font-size: clamp(26px, 3.2vw, 46px);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: 0 16px 34px rgba(2, 6, 18, 0.45), inset 0 2px 0 rgba(255, 255, 255, 0.4);
+  animation: start-pulse 2.4s ease-in-out infinite;
+  transition: transform 120ms ease;
+}
+
+#btn-start:active { transform: scale(0.95); }
+#btn-start:focus-visible { outline: 5px solid #fff; outline-offset: 4px; }
+
+@keyframes start-pulse {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-4px) scale(1.03); }
+}
+
+#start-hint {
+  margin: 0;
+  max-width: 34ch;
+  font-size: clamp(15px, 1.8vw, 24px);
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--ov-fg-2);
+  text-shadow: 0 2px 10px rgba(2, 6, 18, 0.55);
+}
+
+/* 遮罩隐藏：以下任意一种写法都生效（把选择权留给 main.js / screen.js）；
+   .is-hidden 淡出 400ms（对齐契约）。 */
+#start-overlay[hidden],
+#start-overlay.is-hidden,
+#start-overlay.is-gone,
+#app.is-started #start-overlay,
+#app[data-started='true'] #start-overlay,
+body.is-started #start-overlay,
+:root.is-started #start-overlay {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#start-overlay[hidden] { display: none; }
+
+/* ------------------------------------------------------- 11. 隐藏状态位 */
+/* #sr-only-status 给屏幕阅读器与自动化测试用：即使 main.js 摘掉 hidden 属性，
+   视觉上也必须完全不可见（1x1 + clip，不占布局、不影响溢出）。 */
+
+#sr-only-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+/* --------------------------------------------------------- 12. 响应式微调 */
+
+/* 手机竖屏：收紧间距，保证一屏放得下 */
+@media (max-width: 700px) {
+  #card {
+    gap: clamp(8px, 1.8vh, 18px);
+    padding: clamp(8px, 2vh, 20px) 12px;
+  }
+
+  #weather-row { gap: 10px; }
+}
+
+/* 矮视口（横屏手机、小笔记本）：改用高度驱动字号，杜绝竖向溢出 */
+@media (max-height: 700px) and (orientation: landscape) {
+  #app {
+    --fs-city-zh: clamp(30px, 8.4vh, 64px);
+    --fs-city-en: clamp(14px, 3.2vh, 26px);
+    --fs-temp: clamp(40px, 11vh, 84px);
+    --fs-weather-zh: clamp(17px, 4.4vh, 34px);
+    --fs-weather-en: clamp(12px, 2.8vh, 22px);
+    --wi-size: clamp(42px, 11vh, 84px);
+    --gap-card: clamp(2px, 0.7vh, 8px);
+  }
+
+  #card { padding: 6px clamp(10px, 3vw, 32px); }
+}
+
+/* 极窄屏（iPhone SE 320px）：中文名再收一点，杜绝横向溢出 */
+@media (max-width: 360px) {
+  #app {
+    --fs-city-zh: clamp(44px, 13.5vw, 60px);
+    --fs-temp: clamp(68px, 22vw, 100px);
+    --wi-size: clamp(64px, 22vw, 96px);
+  }
+
+  #card { padding-inline: 10px; }
+}
+
+/* 很矮又很窄（横屏小手机）：字号随高度再降一点，但别小到看不清 */
+@media (max-height: 420px) {
+  #app {
+    --fs-city-zh: clamp(28px, 10vh, 52px);
+    --fs-city-en: clamp(12px, 3.4vh, 22px);
+    --fs-temp: clamp(34px, 11vh, 68px);
+    --fs-weather-zh: clamp(15px, 5vh, 28px);
+    --fs-weather-en: clamp(11px, 3vh, 18px);
+    --wi-size: clamp(34px, 11vh, 64px);
+    --gap-card: clamp(2px, 0.8vh, 8px);
+  }
+}
+
+/* ---------------------------------------------- 13. 无障碍与动效偏好 */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* 高对比度模式：halo 加重，音乐键更明显（壁纸依旧不加蒙版） */
+@media (prefers-contrast: more) {
+  #app[data-text-on='dark'] {
+    --fg-shadow: 0 0 3px rgba(0, 0, 0, 0.95), 0 2px 10px rgba(0, 0, 0, 0.85), 0 6px 30px rgba(0, 0, 0, 0.7);
+  }
+
+  #app[data-text-on='light'] {
+    --fg-shadow: 0 0 3px rgba(255, 255, 255, 1), 0 2px 10px rgba(255, 255, 255, 0.95), 0 6px 30px rgba(255, 255, 255, 0.8);
+  }
+
+  #btn-music { opacity: 0.8; }
+}

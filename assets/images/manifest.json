@@ -1,0 +1,945 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-04T21:53:23+08:00",
+  "note": "WeatherRoulette 城市壁纸清单。覆盖 data/cities.json 中全部 81 个城市（43 个国内 + 38 个国外），逐一对齐 id。primary 与 fallbacks 中的每一个 URL 都用 pwsh 的 Invoke-WebRequest（-UseBasicParsing + 浏览器 User-Agent，Accept 限定 image/jpeg,image/webp）实际 GET 验证过：HTTP 200 且 Content-Type 为 image/jpeg 或 image/webp；验证脚本见 tools/verify-images.ps1。图源全部来自可合法外链的免费授权图库：Pixabay（Pixabay Content License）、Pexels（Pexels License）、Unsplash（Unsplash License），均允许免费商用，署名信息保留在 author/page 字段。说明一：unsplash.com / pexels.com / pixabay.com 的搜索页在本机被反爬拦截（HTTP 401 Anubis、403 Cloudflare），因此图片 id 是通过 Bing 图片索引与站内搜索索引发现、再逐条 HTTP 实测确认的，不含任何凭记忆臆造的 URL。说明二：page 字段是按图片 CDN 文件名推导出的图库详情页规范地址（图库站点本身对本机返回 403，无法回读验证）。说明三：极少数城市（credit 中含“同省/同区域地标”字样的条目）在其本地标上确实找不到免费授权实景照片，按降级策略改用同省/同区域知名地标的实景图，并在 credit 中注明，未使用泛用风景图。前端在 primary 加载失败时依次尝试 fallbacks，全部失败才使用内置插画降级。",
+  "images": {
+    "beijing": {
+      "primary": "https://images.pexels.com/photos/34449552/pexels-photo-34449552.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/29604955/pexels-photo-29604955.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2020/07/15/20/42/beijing-5408966_1280.jpg"
+      ],
+      "author": "Da Na",
+      "page": "https://www.pexels.com/photo/34449552/",
+      "license": "Pexels License",
+      "credit": "北京 · aerial view of Beijing's Forbidden City",
+      "verified": true
+    },
+    "tianjin": {
+      "primary": "https://images.pexels.com/photos/37635005/pexels-photo-37635005.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2023/09/04/18/15/tianjin-8233347_1280.jpg",
+        "https://cdn.pixabay.com/photo/2015/01/28/06/46/tianjin-eye-614538_1280.jpg"
+      ],
+      "author": "Zeeshan Rahat Sultan",
+      "page": "https://www.pexels.com/photo/37635005/",
+      "license": "Pexels License",
+      "credit": "天津 · Tianjin Eye ferris wheel",
+      "verified": true
+    },
+    "shijiazhuang": {
+      "primary": "https://cdn.pixabay.com/photo/2020/02/05/19/50/mutianyu-4822218_1280.jpg",
+      "fallbacks": [],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/mutianyu-4822218/",
+      "license": "Pixabay Content License",
+      "credit": "石家庄 · Mutianyu Great Wall Of China Trees（该市地标暂无免费授权实景图，改用同省/同区域地标）",
+      "verified": true
+    },
+    "taiyuan": {
+      "primary": "https://cdn.pixabay.com/photo/2016/05/22/15/23/shanxi-1408641_1280.jpg",
+      "fallbacks": [],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/shanxi-1408641/",
+      "license": "Pixabay Content License",
+      "credit": "太原 · Shanxi Taiyuan Mengshan",
+      "verified": true
+    },
+    "hohhot": {
+      "primary": "https://images.pexels.com/photos/35905576/pexels-photo-35905576.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/35919608/pexels-photo-35919608.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Eric Prouzet",
+      "page": "https://www.pexels.com/photo/35905576/",
+      "license": "Pexels License",
+      "credit": "呼和浩特 · ornate Chinese temple in Hohhot (Dazhao Temple)",
+      "verified": true
+    },
+    "shenyang": {
+      "primary": "https://images.pexels.com/photos/16730527/pexels-photo-16730527.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [],
+      "author": "Lan Yao",
+      "page": "https://www.pexels.com/photo/16730527/",
+      "license": "Pexels License",
+      "credit": "沈阳 · entrance of the Shenyang Imperial Palace (Mukden Palace)",
+      "verified": true
+    },
+    "dalian": {
+      "primary": "https://cdn.pixabay.com/photo/2016/03/31/09/19/xinghai-square-1292317_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2021/04/03/03/50/dalian-6146434_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/xinghai-square-1292317/",
+      "license": "Pixabay Content License",
+      "credit": "大连 · Xinghai Square & Dalian Images",
+      "verified": true
+    },
+    "changchun": {
+      "primary": "https://images.pexels.com/photos/35542565/pexels-photo-35542565.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/35542564/pexels-photo-35542564.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2017/08/10/07/02/changchun-2619249_1280.jpg"
+      ],
+      "author": "zheng liang",
+      "page": "https://www.pexels.com/photo/35542565/",
+      "license": "Pexels License",
+      "credit": "长春 · peaceful winter mountain landscape under a full moon (Jingyuetan winter, Changchun)",
+      "verified": true
+    },
+    "harbin": {
+      "primary": "https://cdn.pixabay.com/photo/2020/04/27/13/45/harbin-5099926_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2019/01/19/15/53/ice-3941906_1280.jpg",
+        "https://cdn.pixabay.com/photo/2020/04/27/13/45/harbin-5099926_640.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/harbin-5099926/",
+      "license": "Pixabay Content License",
+      "credit": "哈尔滨 · 哈尔滨 冬天 节日 - Pixabay上的免费照片",
+      "verified": true
+    },
+    "shanghai": {
+      "primary": "https://images.pexels.com/photos/30685869/pexels-photo-30685869.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/30221299/pexels-photo-30221299.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2022/02/17/08/47/shanghai-7018285_1280.jpg"
+      ],
+      "author": "JC Terry",
+      "page": "https://www.pexels.com/photo/30685869/",
+      "license": "Pexels License",
+      "credit": "上海 · night skyline at the Bund in Shanghai",
+      "verified": true
+    },
+    "nanjing": {
+      "primary": "https://images.pexels.com/photos/36912237/pexels-photo-36912237.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/39012543/pexels-photo-39012543.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2017/07/03/16/10/sun-yat-sen-memorial-hall-2468187_1280.jpg"
+      ],
+      "author": "gang liang",
+      "page": "https://www.pexels.com/photo/36912237/",
+      "license": "Pexels License",
+      "credit": "南京 · ancient stone wall path in Nanjing",
+      "verified": true
+    },
+    "suzhou": {
+      "primary": "https://images.pexels.com/photos/33472148/pexels-photo-33472148.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/36795941/pexels-photo-36795941.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2022/11/05/14/49/classical-7571962_1280.jpg"
+      ],
+      "author": "fusheng L",
+      "page": "https://www.pexels.com/photo/33472148/",
+      "license": "Pexels License",
+      "credit": "苏州 · Chinese garden pavilion (Suzhou classical garden)",
+      "verified": true
+    },
+    "hangzhou": {
+      "primary": "https://images.pexels.com/photos/20700881/pexels-photo-20700881.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2022/03/18/02/45/hangzhou-west-lake-7075750_1280.jpg",
+        "https://cdn.pixabay.com/photo/2017/03/28/12/01/west-lake-2181891_1280.jpg"
+      ],
+      "author": "miyou_ 77",
+      "page": "https://www.pexels.com/photo/20700881/",
+      "license": "Pexels License",
+      "credit": "杭州 · West Lake and the Leifeng Pagoda, Hangzhou",
+      "verified": true
+    },
+    "ningbo": {
+      "primary": "https://images.pexels.com/photos/37599527/pexels-photo-37599527.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/07/18/10/29/tianyi-pavilion-5416780_1280.jpg"
+      ],
+      "author": "Jin Zhang",
+      "page": "https://www.pexels.com/photo/37599527/",
+      "license": "Pexels License",
+      "credit": "宁波 · skyline of Ningbo at dusk with skyscrapers",
+      "verified": true
+    },
+    "hefei": {
+      "primary": "https://images.pexels.com/photos/30607308/pexels-photo-30607308.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2015/03/27/06/35/swan-694384_1280.jpg",
+        "https://cdn.pixabay.com/photo/2015/12/11/16/14/swan-1088377_1280.jpg"
+      ],
+      "author": "Joanie xie",
+      "page": "https://www.pexels.com/photo/30607308/",
+      "license": "Pexels License",
+      "credit": "合肥 · aerial view of the Hefei city skyline in daylight",
+      "verified": true
+    },
+    "fuzhou": {
+      "primary": "https://images.pexels.com/photos/15737902/pexels-photo-15737902.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/33650827/pexels-photo-33650827.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://images.pexels.com/photos/38243574/pexels-photo-38243574.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "fei wang",
+      "page": "https://www.pexels.com/photo/15737902/",
+      "license": "Pexels License",
+      "credit": "福州 · city buildings trees pond (unconfirmed)",
+      "verified": true
+    },
+    "xiamen": {
+      "primary": "https://images.pexels.com/photos/37714925/pexels-photo-37714925.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/37714922/pexels-photo-37714922.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2015/03/04/15/07/gulangyu-island-658898_1280.jpg"
+      ],
+      "author": "toter yau",
+      "page": "https://www.pexels.com/photo/37714925/",
+      "license": "Pexels License",
+      "credit": "厦门 · Gulangyu island, Xiamen",
+      "verified": true
+    },
+    "nanchang": {
+      "primary": "https://images.pexels.com/photos/36348004/pexels-photo-36348004.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [],
+      "author": "CHINA YU",
+      "page": "https://www.pexels.com/photo/36348004/",
+      "license": "Pexels License",
+      "credit": "南昌 · night view of the Pavilion of Prince Teng (Tengwang Pavilion)",
+      "verified": true
+    },
+    "jinan": {
+      "primary": "https://images.pexels.com/photos/37510230/pexels-photo-37510230.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/04/23/00/59/baotu-spring-5080628_1280.jpg",
+        "https://cdn.pixabay.com/photo/2016/02/13/10/35/spring-awakening-1197603_1280.jpg"
+      ],
+      "author": "gang liang",
+      "page": "https://www.pexels.com/photo/37510230/",
+      "license": "Pexels License",
+      "credit": "济南 · spring pool with willow trees (Baotu Spring, Jinan)",
+      "verified": true
+    },
+    "qingdao": {
+      "primary": "https://images.pexels.com/photos/34601053/pexels-photo-34601053.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [],
+      "author": "Duoyu_ Wang",
+      "page": "https://www.pexels.com/photo/34601053/",
+      "license": "Pexels License",
+      "credit": "青岛 · aerial photo of Zhanqiao Pier, Qingdao",
+      "verified": true
+    },
+    "zhengzhou": {
+      "primary": "https://images.pexels.com/photos/35017101/pexels-photo-35017101.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/38758695/pexels-photo-38758695.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://images.pexels.com/photos/38487774/pexels-photo-38487774.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Abdus Samad Mahkri",
+      "page": "https://www.pexels.com/photo/35017101/",
+      "license": "Pexels License",
+      "credit": "郑州 · Zhengzhou (unconfirmed)",
+      "verified": true
+    },
+    "wuhan": {
+      "primary": "https://cdn.pixabay.com/photo/2019/07/31/02/58/the-yellow-crane-tower-4374205_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2021/06/18/07/45/yellow-crane-tower-6345409_1280.jpg",
+        "https://cdn.pixabay.com/photo/2017/09/22/12/09/yellow-crane-2775351_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/the-yellow-crane-tower-4374205/",
+      "license": "Pixabay Content License",
+      "credit": "武汉 · Yellow Crane Tower View Yangtze - Free photo on Pixabay",
+      "verified": true
+    },
+    "changsha": {
+      "primary": "https://images.pexels.com/photos/35422092/pexels-photo-35422092.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/11/08/07/47/orange-isle-5723034_1280.jpg",
+        "https://cdn.pixabay.com/photo/2016/11/15/03/55/changsha-1825257_1280.jpg"
+      ],
+      "author": "CHINA YU",
+      "page": "https://www.pexels.com/photo/35422092/",
+      "license": "Pexels License",
+      "credit": "长沙 · aerial view of Changsha's skyline and river",
+      "verified": true
+    },
+    "guangzhou": {
+      "primary": "https://images.pexels.com/photos/30304296/pexels-photo-30304296.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2014/10/28/02/30/canton-tower-506115_1280.jpg",
+        "https://cdn.pixabay.com/photo/2021/11/08/04/17/canton-tower-6778375_1280.jpg"
+      ],
+      "author": "Muhamad Guruh Budi Hartono",
+      "page": "https://www.pexels.com/photo/30304296/",
+      "license": "Pexels License",
+      "credit": "广州 · Canton Tower against a clear blue sky",
+      "verified": true
+    },
+    "shenzhen": {
+      "primary": "https://images.pexels.com/photos/30770660/pexels-photo-30770660.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/33625693/pexels-photo-33625693.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "TBD Traveller",
+      "page": "https://www.pexels.com/photo/30770660/",
+      "license": "Pexels License",
+      "credit": "深圳 · Shenzhen city",
+      "verified": true
+    },
+    "zhuhai": {
+      "primary": "https://images.pexels.com/photos/31507206/pexels-photo-31507206.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/28732019/pexels-photo-28732019.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Madzery Ma",
+      "page": "https://www.pexels.com/photo/31507206/",
+      "license": "Pexels License",
+      "credit": "珠海 · coastal promenade in Zhuhai, China",
+      "verified": true
+    },
+    "foshan": {
+      "primary": "https://images.pexels.com/photos/35272174/pexels-photo-35272174.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2019/12/20/11/03/hampi-4708208_1280.jpg",
+        "https://cdn.pixabay.com/photo/2020/04/06/08/59/mahabalipuram-5008863_1280.jpg"
+      ],
+      "author": "Bingqian Li",
+      "page": "https://www.pexels.com/photo/35272174/",
+      "license": "Pexels License",
+      "credit": "佛山 · ornate roof of the Chen Clan ancestral hall, Guangdong (Lingnan architecture, same province as Foshan)",
+      "verified": true
+    },
+    "dongguan": {
+      "primary": "https://images.pexels.com/photos/36267614/pexels-photo-36267614.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2022/04/27/02/25/the-twin-towers-7159513_1280.jpg"
+      ],
+      "author": "Polina Kts",
+      "page": "https://www.pexels.com/photo/36267614/",
+      "license": "Pexels License",
+      "credit": "东莞 · traditional architecture in Dongguan, China",
+      "verified": true
+    },
+    "nanning": {
+      "primary": "https://images.pexels.com/photos/29431917/pexels-photo-29431917.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/38225961/pexels-photo-38225961.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://images.pexels.com/photos/35882273/pexels-photo-35882273.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "雨 幽",
+      "page": "https://www.pexels.com/photo/29431917/",
+      "license": "Pexels License",
+      "credit": "南宁 · ancient pavilion and modern skyscraper, Nanning",
+      "verified": true
+    },
+    "haikou": {
+      "primary": "https://images.pexels.com/photos/37534906/pexels-photo-37534906.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [],
+      "author": "Miguel Cuenca",
+      "page": "https://www.pexels.com/photo/37534906/",
+      "license": "Pexels License",
+      "credit": "海口 · modern city skyline across the river at dusk, Haikou",
+      "verified": true
+    },
+    "chongqing": {
+      "primary": "https://images.pexels.com/photos/37343131/pexels-photo-37343131.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/30606159/pexels-photo-30606159.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2019/04/28/12/21/city-4163006_1280.jpg"
+      ],
+      "author": "Ruben VP",
+      "page": "https://www.pexels.com/photo/37343131/",
+      "license": "Pexels License",
+      "credit": "重庆 · illuminated Hongya Cave at night, Chongqing",
+      "verified": true
+    },
+    "chengdu": {
+      "primary": "https://images.pexels.com/photos/31394693/pexels-photo-31394693.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/12/17/07/06/chengdu-5838397_1280.jpg",
+        "https://cdn.pixabay.com/photo/2013/11/20/23/02/panda-214260_1280.jpg"
+      ],
+      "author": "Lin K",
+      "page": "https://www.pexels.com/photo/31394693/",
+      "license": "Pexels License",
+      "credit": "成都 · giant panda eating bamboo",
+      "verified": true
+    },
+    "guiyang": {
+      "primary": "https://images.pexels.com/photos/31417628/pexels-photo-31417628.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [],
+      "author": "Johnny Song",
+      "page": "https://www.pexels.com/photo/31417628/",
+      "license": "Pexels License",
+      "credit": "贵阳 · street view of Guiyang city, Guizhou province",
+      "verified": true
+    },
+    "kunming": {
+      "primary": "https://cdn.pixabay.com/photo/2015/08/31/17/01/dianchi-lake-915738_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/09/17/08/05/dianchi-lake-5578322_1280.jpg",
+        "https://images.pexels.com/photos/38927678/pexels-photo-38927678.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/dianchi-lake-915738/",
+      "license": "Pixabay Content License",
+      "credit": "昆明 · Dianchi Yunnan",
+      "verified": true
+    },
+    "xian": {
+      "primary": "https://cdn.pixabay.com/photo/2016/11/28/13/18/terracotta-army-1864981_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2016/11/28/13/22/terracotta-army-1864983_1280.jpg",
+        "https://cdn.pixabay.com/photo/2016/11/28/13/23/terracotta-army-1864984_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/terracotta-army-1864981/",
+      "license": "Pixabay Content License",
+      "credit": "西安 · Terracotta Army China Xi'An - Free photo on Pixabay",
+      "verified": true
+    },
+    "lanzhou": {
+      "primary": "https://cdn.pixabay.com/photo/2020/11/10/02/00/zhongshan-bridge-5728286_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/11/10/02/00/zhongshan-bridge-5728287_1280.jpg",
+        "https://images.pexels.com/photos/35216090/pexels-photo-35216090.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/zhongshan-bridge-5728286/",
+      "license": "Pixabay Content License",
+      "credit": "兰州 · Pont De Zhongshan Lumière Vue - Photo gratuite sur Pixabay",
+      "verified": true
+    },
+    "xining": {
+      "primary": "https://images.pexels.com/photos/34630868/pexels-photo-34630868.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2014/12/16/06/18/kumbum-569984_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/12/16/06/18/kumbum-569984_640.jpg"
+      ],
+      "author": "Pexels photographer",
+      "page": "https://www.pexels.com/photo/34630868/",
+      "license": "Pexels License",
+      "credit": "西宁 · Qinghai lake landscape (Xining's province)",
+      "verified": true
+    },
+    "yinchuan": {
+      "primary": "https://cdn.pixabay.com/photo/2016/03/21/10/44/desert-1270345_1280.jpg",
+      "fallbacks": [],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/desert-1270345/",
+      "license": "Pixabay Content License",
+      "credit": "银川 · Sand Dunes Desert - Free photo on Pixabay（该市地标暂无免费授权实景图，改用同省/同区域地标）",
+      "verified": true
+    },
+    "urumqi": {
+      "primary": "https://cdn.pixabay.com/photo/2016/08/09/05/56/in-xinjiang-1579952_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2016/08/09/06/01/in-xinjiang-1579962_1280.jpg",
+        "https://cdn.pixabay.com/photo/2017/09/27/04/03/tianshan-2790918_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/in-xinjiang-1579952/",
+      "license": "Pixabay Content License",
+      "credit": "乌鲁木齐 · Xinjiang Tianshan - Free photo on Pixabay",
+      "verified": true
+    },
+    "lhasa": {
+      "primary": "https://cdn.pixabay.com/photo/2015/03/18/12/46/the-potala-palace-679264_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2015/11/06/12/31/potala-1027013_1280.jpg",
+        "https://cdn.pixabay.com/photo/2016/09/01/07/56/lhasa-1635411_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/the-potala-palace-679264/",
+      "license": "Pixabay Content License",
+      "credit": "拉萨 · Potala Palace Lhasa White",
+      "verified": true
+    },
+    "hongkong": {
+      "primary": "https://images.pexels.com/photos/7179515/pexels-photo-7179515.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/27228741/pexels-photo-27228741.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2014/09/13/12/29/hong-kong-victoria-harbour-443970_1280.jpg"
+      ],
+      "author": "Gije Cho",
+      "page": "https://www.pexels.com/photo/7179515/",
+      "license": "Pexels License",
+      "credit": "香港 · Victoria Harbour, Hong Kong",
+      "verified": true
+    },
+    "macau": {
+      "primary": "https://images.pexels.com/photos/37450174/pexels-photo-37450174.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/33445230/pexels-photo-33445230.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Blackcurrant Great",
+      "page": "https://www.pexels.com/photo/37450174/",
+      "license": "Pexels License",
+      "credit": "澳门 · Ruins of St Paul's cathedral, Macao",
+      "verified": true
+    },
+    "taipei": {
+      "primary": "https://images.pexels.com/photos/29309568/pexels-photo-29309568.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/34244549/pexels-photo-34244549.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://images.pexels.com/photos/32277904/pexels-photo-32277904.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Ryan Lee",
+      "page": "https://www.pexels.com/photo/29309568/",
+      "license": "Pexels License",
+      "credit": "台北 · Taipei 101 tower",
+      "verified": true
+    },
+    "tokyo": {
+      "primary": "https://images.pexels.com/photos/37784377/pexels-photo-37784377.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/36476002/pexels-photo-36476002.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://images.pexels.com/photos/35158338/pexels-photo-35158338.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Daniel Reynaga",
+      "page": "https://www.pexels.com/photo/37784377/",
+      "license": "Pexels License",
+      "credit": "东京 · view over Tokyo Tower at dusk",
+      "verified": true
+    },
+    "osaka": {
+      "primary": "https://cdn.pixabay.com/photo/2013/09/18/12/05/osaka-castle-183440_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/09/18/12/05/osaka-castle-183445_1280.jpg",
+        "https://cdn.pixabay.com/photo/2013/09/18/12/06/osaka-castle-183446_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/osaka-castle-183440/",
+      "license": "Pixabay Content License",
+      "credit": "大阪 · Osaka Castle",
+      "verified": true
+    },
+    "kyoto": {
+      "primary": "https://cdn.pixabay.com/photo/2016/07/04/22/20/kiyomizudera-temple-1497618_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2016/07/04/22/10/kyoto-1497599_1280.jpg",
+        "https://cdn.pixabay.com/photo/2016/07/04/22/10/kyoto-1497600_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/kiyomizudera-temple-1497618/",
+      "license": "Pixabay Content License",
+      "credit": "京都 · Kiyomizu-Dera & Kyoto Images",
+      "verified": true
+    },
+    "sapporo": {
+      "primary": "https://cdn.pixabay.com/photo/2020/02/08/17/59/snow-4830824_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/02/08/17/59/snow-4830824_640.jpg",
+        "https://cdn.pixabay.com/photo/2015/07/09/08/32/snow-carving-837401_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/snow-4830824/",
+      "license": "Pixabay Content License",
+      "credit": "札幌 · Sapporo Snow Festival & Sapporo Images",
+      "verified": true
+    },
+    "seoul": {
+      "primary": "https://cdn.pixabay.com/photo/2021/11/01/00/41/gyeongbokgung-palace-6759019_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2021/11/01/00/42/gyeongbokgung-palace-6759024_1280.jpg",
+        "https://cdn.pixabay.com/photo/2021/11/01/00/42/gyeongbokgung-palace-6759025_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/gyeongbokgung-palace-6759019/",
+      "license": "Pixabay Content License",
+      "credit": "首尔 · Gyeongbokgung Palace Seoul South",
+      "verified": true
+    },
+    "busan": {
+      "primary": "https://cdn.pixabay.com/photo/2013/01/17/02/17/busan-75137_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/12/17/01/41/haeundae-beach-229490_1280.jpg",
+        "https://cdn.pixabay.com/photo/2017/06/15/09/51/busan-2404648_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/busan-75137/",
+      "license": "Pixabay Content License",
+      "credit": "釜山 · Busan Haeundae Beach Umbrellas",
+      "verified": true
+    },
+    "singapore": {
+      "primary": "https://cdn.pixabay.com/photo/2017/09/04/18/00/marina-bay-of-singapore-2714867_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2012/12/27/19/40/marina-bay-sands-72817_1280.jpg",
+        "https://cdn.pixabay.com/photo/2013/09/05/07/49/marina-bay-sands-179023_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/marina-bay-of-singapore-2714867/",
+      "license": "Pixabay Content License",
+      "credit": "新加坡 · Marina Bay Sands & Singapore Images",
+      "verified": true
+    },
+    "sydney": {
+      "primary": "https://images.pexels.com/photos/945615/pexels-photo-945615.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/03/13/01/22/sydney-opera-house-93081_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/02/26/11/02/sydney-opera-house-275014_1280.jpg"
+      ],
+      "author": "David Jia",
+      "page": "https://www.pexels.com/photo/945615/",
+      "license": "Pexels License",
+      "credit": "悉尼 · low angle photo of the Sydney Opera House",
+      "verified": true
+    },
+    "melbourne": {
+      "primary": "https://cdn.pixabay.com/photo/2017/11/29/14/54/melbourne-2986345_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/04/22/08/01/melbourne-5076470_1280.jpg",
+        "https://cdn.pixabay.com/photo/2020/04/22/08/04/melbourne-5076478_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/melbourne-2986345/",
+      "license": "Pixabay Content License",
+      "credit": "墨尔本 · Melbourne Skyline & Melbourne Images",
+      "verified": true
+    },
+    "auckland": {
+      "primary": "https://cdn.pixabay.com/photo/2019/11/20/06/38/auckland-4639321_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/01/01/15/56/new-zealand-73230_1280.jpg",
+        "https://cdn.pixabay.com/photo/2013/07/18/14/52/sky-tower-163931_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/auckland-4639321/",
+      "license": "Pixabay Content License",
+      "credit": "奥克兰 · Auckland Skyline Sunset New - Free photo on Pixabay",
+      "verified": true
+    },
+    "london": {
+      "primary": "https://cdn.pixabay.com/photo/2017/02/22/23/05/london-2090902_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2012/11/11/14/49/london-65722_1280.jpg",
+        "https://cdn.pixabay.com/photo/2016/07/10/23/31/london-1508784_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/london-2090902/",
+      "license": "Pixabay Content License",
+      "credit": "伦敦 · London Big Ben Elisabeth Tower - Free photo on Pixabay",
+      "verified": true
+    },
+    "edinburgh": {
+      "primary": "https://cdn.pixabay.com/photo/2015/09/26/13/45/edinburgh-castle-959082_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2015/09/26/13/45/edinburgh-castle-959083_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/06/10/18/45/edinburgh-366272_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/edinburgh-castle-959082/",
+      "license": "Pixabay Content License",
+      "credit": "爱丁堡 · Edinburgh Castle - Free photo on Pixabay",
+      "verified": true
+    },
+    "paris": {
+      "primary": "https://images.pexels.com/photos/13848468/pexels-photo-13848468.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/30498988/pexels-photo-30498988.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://cdn.pixabay.com/photo/2013/05/07/19/19/eiffel-109373_1280.jpg"
+      ],
+      "author": "Mehmet Turgut Kirkgoz",
+      "page": "https://www.pexels.com/photo/13848468/",
+      "license": "Pexels License",
+      "credit": "巴黎 · the Eiffel Tower in Paris",
+      "verified": true
+    },
+    "marseille": {
+      "primary": "https://cdn.pixabay.com/photo/2016/01/28/18/08/marseille-1166752_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2016/03/12/06/10/marseille-1251552_1280.jpg",
+        "https://cdn.pixabay.com/photo/2018/05/23/08/50/marseille-3423494_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/marseille-1166752/",
+      "license": "Pixabay Content License",
+      "credit": "马赛 · Marseille Vieux Port France - Photo gratuite sur Pixabay",
+      "verified": true
+    },
+    "berlin": {
+      "primary": "https://cdn.pixabay.com/photo/2010/12/28/00/17/brandenburg-gate-4164_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2012/02/24/11/28/brandenburg-16454_1280.jpg",
+        "https://cdn.pixabay.com/photo/2012/11/19/07/08/berlin-66593_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/brandenburg-gate-4164/",
+      "license": "Pixabay Content License",
+      "credit": "柏林 · Brandenburg Gate Berlin Building",
+      "verified": true
+    },
+    "munich": {
+      "primary": "https://cdn.pixabay.com/photo/2013/08/03/16/45/munich-169621_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2014/03/11/18/33/munich-285454_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/12/10/09/42/munich-562902_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/munich-169621/",
+      "license": "Pixabay Content License",
+      "credit": "慕尼黑 · Munich Marienplatz Capitale De - Photo gratuite sur Pixabay",
+      "verified": true
+    },
+    "frankfurt": {
+      "primary": "https://cdn.pixabay.com/photo/2020/05/20/11/18/frankfurt-am-main-5195945_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/10/17/22/51/frankfurt-197242_1280.jpg",
+        "https://cdn.pixabay.com/photo/2015/11/08/10/36/frankfurt-1033408_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/frankfurt-am-main-5195945/",
+      "license": "Pixabay Content License",
+      "credit": "法兰克福 · Frankfurt Am Main Germany - Free photo on Pixabay",
+      "verified": true
+    },
+    "rome": {
+      "primary": "https://cdn.pixabay.com/photo/2013/08/17/18/35/rome-173469_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2014/04/18/14/30/colosseum-327242_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/11/12/15/44/colosseum-528453_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/rome-173469/",
+      "license": "Pixabay Content License",
+      "credit": "罗马 · Colosseum & Rome Images",
+      "verified": true
+    },
+    "milan": {
+      "primary": "https://cdn.pixabay.com/photo/2020/04/16/04/34/duomo-di-milano-5048997_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/04/16/04/34/duomo-di-milano-5048997_960_720.jpg",
+        "https://cdn.pixabay.com/photo/2015/04/01/11/02/duomo-702174_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/duomo-di-milano-5048997/",
+      "license": "Pixabay Content License",
+      "credit": "米兰 · Duomo Di Milano Milan Italie - Photo gratuite sur Pixabay",
+      "verified": true
+    },
+    "venice": {
+      "primary": "https://cdn.pixabay.com/photo/2017/06/01/16/36/venice-2363884_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2012/11/14/12/44/st-marks-square-66071_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/10/02/09/54/st-marks-square-469739_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/venice-2363884/",
+      "license": "Pixabay Content License",
+      "credit": "威尼斯 · Venice Italy Skyline St Mark'S - Free photo on Pixabay",
+      "verified": true
+    },
+    "madrid": {
+      "primary": "https://cdn.pixabay.com/photo/2017/08/09/21/55/royal-palace-2615940_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2018/06/06/21/10/royal-palace-3458815_1280.jpg",
+        "https://cdn.pixabay.com/photo/2018/06/06/21/11/royal-3458817_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/royal-palace-2615940/",
+      "license": "Pixabay Content License",
+      "credit": "马德里 · Royal Palace Madrid",
+      "verified": true
+    },
+    "barcelona": {
+      "primary": "https://cdn.pixabay.com/photo/2014/11/30/20/46/sagrada-familia-552084_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2015/11/03/11/25/sagrada-familia-1020589_1280.jpg",
+        "https://cdn.pixabay.com/photo/2021/09/24/20/25/barcelona-6653452_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/sagrada-familia-552084/",
+      "license": "Pixabay Content License",
+      "credit": "巴塞罗那 · Basílica De La Sagrada Família & Barcelona Images",
+      "verified": true
+    },
+    "amsterdam": {
+      "primary": "https://images.pexels.com/photos/38354668/pexels-photo-38354668.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2017/08/21/10/22/canal-2664791_1280.jpg",
+        "https://cdn.pixabay.com/photo/2020/06/03/17/24/canal-du-midi-5255755_1280.jpg"
+      ],
+      "author": "Catarina Duarte",
+      "page": "https://www.pexels.com/photo/38354668/",
+      "license": "Pexels License",
+      "credit": "阿姆斯特丹 · Amsterdam canal (unconfirmed)",
+      "verified": true
+    },
+    "zurich": {
+      "primary": "https://cdn.pixabay.com/photo/2013/09/16/11/29/lake-zurich-182799_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/11/08/16/45/lake-zurich-207498_1280.jpg",
+        "https://cdn.pixabay.com/photo/2013/12/07/23/29/lake-zurich-224901_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/lake-zurich-182799/",
+      "license": "Pixabay Content License",
+      "credit": "苏黎世 · Lake Zurich Seen From Uetliberg - Free photo on Pixabay",
+      "verified": true
+    },
+    "vienna": {
+      "primary": "https://cdn.pixabay.com/photo/2015/03/14/00/52/vienna-672509_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2016/05/09/22/43/vienna-1382736_1280.jpg",
+        "https://cdn.pixabay.com/photo/2015/03/14/00/52/vienna-672509_960_720.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/vienna-672509/",
+      "license": "Pixabay Content License",
+      "credit": "维也纳 · Wien Nacht Musikverein",
+      "verified": true
+    },
+    "stockholm": {
+      "primary": "https://cdn.pixabay.com/photo/2017/03/31/03/56/gamla-stan-2190333_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/08/23/13/34/stockholm-175015_1280.jpg",
+        "https://cdn.pixabay.com/photo/2013/08/23/13/34/stockholm-175016_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/gamla-stan-2190333/",
+      "license": "Pixabay Content License",
+      "credit": "斯德哥尔摩 · Gamla Stanwinter & Stockholm Images",
+      "verified": true
+    },
+    "oslo": {
+      "primary": "https://images.pexels.com/photos/33686129/pexels-photo-33686129.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [],
+      "author": "Miguel Rivera",
+      "page": "https://www.pexels.com/photo/33686129/",
+      "license": "Pexels License",
+      "credit": "奥斯陆 · modern architecture of the Oslo Opera House",
+      "verified": true
+    },
+    "copenhagen": {
+      "primary": "https://images.pexels.com/photos/36031762/pexels-photo-36031762.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://images.pexels.com/photos/34973706/pexels-photo-34973706.jpeg?auto=compress&cs=tinysrgb&w=1600",
+        "https://images.pexels.com/photos/34024816/pexels-photo-34024816.jpeg?auto=compress&cs=tinysrgb&w=1600"
+      ],
+      "author": "Abhishek Navlakha",
+      "page": "https://www.pexels.com/photo/36031762/",
+      "license": "Pexels License",
+      "credit": "哥本哈根 · Nyhavn, Copenhagen",
+      "verified": true
+    },
+    "helsinki": {
+      "primary": "https://images.pexels.com/photos/31758904/pexels-photo-31758904.jpeg?auto=compress&cs=tinysrgb&w=1600",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2012/03/01/00/31/cathedral-19664_1280.jpg",
+        "https://cdn.pixabay.com/photo/2013/07/18/15/02/cathedral-164315_1280.jpg"
+      ],
+      "author": "Ilya B",
+      "page": "https://www.pexels.com/photo/31758904/",
+      "license": "Pexels License",
+      "credit": "赫尔辛基 · the dome of Helsinki Cathedral",
+      "verified": true
+    },
+    "reykjavik": {
+      "primary": "https://cdn.pixabay.com/photo/2013/03/08/03/52/aurora-91420_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/12/09/03/52/aurora-225449_1280.jpg",
+        "https://cdn.pixabay.com/photo/2015/01/05/09/18/aurora-589052_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/aurora-91420/",
+      "license": "Pixabay Content License",
+      "credit": "雷克雅未克 · Aurora Borealis Northern Lights - Photo gratuite sur Pixabay",
+      "verified": true
+    },
+    "newyork": {
+      "primary": "https://cdn.pixabay.com/photo/2010/12/15/14/08/statue-of-liberty-3397_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2014/08/13/20/14/statue-of-liberty-417611_1280.jpg",
+        "https://cdn.pixabay.com/photo/2015/02/10/20/05/statue-of-liberty-631597_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/statue-of-liberty-3397/",
+      "license": "Pixabay Content License",
+      "credit": "纽约 · Statue Of Liberty New York Ny",
+      "verified": true
+    },
+    "losangeles": {
+      "primary": "https://cdn.pixabay.com/photo/2015/12/13/08/53/hollywood-1090797_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2016/09/21/03/14/hollywood-1683952_1280.jpg",
+        "https://cdn.pixabay.com/photo/2017/09/01/19/55/hollywood-2705297_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/hollywood-1090797/",
+      "license": "Pixabay Content License",
+      "credit": "洛杉矶 · Hollywood Los Angeles - Free photo on Pixabay",
+      "verified": true
+    },
+    "sanfrancisco": {
+      "primary": "https://cdn.pixabay.com/photo/2012/10/05/01/19/golden-gate-bridge-59612_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/11/28/09/57/golden-gate-bridge-219798_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/11/12/12/34/golden-gate-bridge-528302_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/golden-gate-bridge-59612/",
+      "license": "Pixabay Content License",
+      "credit": "旧金山 · Golden Gate Bridge & San Francisco Photos",
+      "verified": true
+    },
+    "chicago": {
+      "primary": "https://cdn.pixabay.com/photo/2015/09/18/00/46/cloud-gate-944895_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2017/07/20/00/13/chicago-2520867_1280.jpg",
+        "https://cdn.pixabay.com/photo/2015/09/18/00/46/cloud-gate-944895_960_720.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/cloud-gate-944895/",
+      "license": "Pixabay Content License",
+      "credit": "芝加哥 · Cloud Gate Chicago Sculpture",
+      "verified": true
+    },
+    "seattle": {
+      "primary": "https://cdn.pixabay.com/photo/2013/02/15/05/38/space-needle-81811_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2013/09/07/09/31/space-needle-179856_1280.jpg",
+        "https://cdn.pixabay.com/photo/2014/10/06/17/54/space-needle-476621_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/space-needle-81811/",
+      "license": "Pixabay Content License",
+      "credit": "西雅图 · Space Needle Seattle Horizonte - Foto gratuita no Pixabay",
+      "verified": true
+    },
+    "honolulu": {
+      "primary": "https://cdn.pixabay.com/photo/2019/06/15/17/32/waikiki-4276133_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2020/09/14/19/50/waikiki-5572004_1280.jpg",
+        "https://cdn.pixabay.com/photo/2019/06/15/17/32/waikiki-4276133_640.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/waikiki-4276133/",
+      "license": "Pixabay Content License",
+      "credit": "檀香山 · Waikiki Honolulu Hawaii Ufuk - Pixabay'de ücretsiz fotoğraf",
+      "verified": true
+    },
+    "toronto": {
+      "primary": "https://cdn.pixabay.com/photo/2014/03/01/18/31/toronto-277693_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2016/03/20/02/11/toronto-1267833_1280.jpg",
+        "https://cdn.pixabay.com/photo/2016/04/01/00/08/toronto-1298016_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/toronto-277693/",
+      "license": "Pixabay Content License",
+      "credit": "多伦多 · Cn Tower & Toronto Images",
+      "verified": true
+    },
+    "vancouver": {
+      "primary": "https://cdn.pixabay.com/photo/2014/10/11/22/48/vancouver-485154_1280.jpg",
+      "fallbacks": [
+        "https://cdn.pixabay.com/photo/2018/12/20/10/36/vancouver-3885655_1280.jpg",
+        "https://cdn.pixabay.com/photo/2020/05/07/17/18/vancouver-5142336_1280.jpg"
+      ],
+      "author": "Pixabay contributor",
+      "page": "https://pixabay.com/photos/vancouver-485154/",
+      "license": "Pixabay Content License",
+      "credit": "温哥华 · Vancouver Stanley Park Downtown - Free photo on Pixabay",
+      "verified": true
+    }
+  }
+}

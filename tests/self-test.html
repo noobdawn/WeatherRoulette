@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WeatherRoulette 播放引擎自测（task-3）</title>
+<!--
+  播放引擎自测页（js/audio/speech.js / music.js / player.js + js/ui/screen.js）
+  --------------------------------------------------------------------------
+  用法（必须用 http 打开，file:// 下 fetch 清单会失败）：
+    python -m http.server 8080
+    浏览器打开 http://localhost:8080/tools/self-test.html
+  无头浏览器（本机 Chrome/Edge）：
+    msedge --headless=new --disable-gpu --virtual-time-budget=40000 \
+           --dump-dom http://localhost:8137/tools/self-test.html | Select-String "ALL-PASS|HAS-FAILURE"
+  注意：--virtual-time-budget 会快进定时器，但媒体播放时钟不会跟着快进，所以端到端那一节
+  （?e2e=1）必须在真实时间下跑，结果用 beacon 回报：
+    chrome --headless=new --autoplay-policy=no-user-gesture-required \
+           http://localhost:8137/tools/self-test.html?e2e=1
+    然后到 python -m http.server 日志里找 "__selftest_beacon?selftest=1&pass=..&fail=.."
+  断言结果同时写进 <title> 和 #summary，方便脚本抓取。
+  这个页面自带一份 index.html 的 DOM 契约副本，不依赖真实 index.html 是否就绪。
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0b1020; color: #e8eefc; font: 15px/1.6 system-ui, 'Microsoft YaHei', sans-serif; }
+  #stage { position: relative; width: 100%; height: 62vh; min-height: 320px; overflow: hidden; background: #060a18; }
+  #app { position: absolute; inset: 0; display: grid; grid-template-rows: 1fr auto; }
+  #app.is-night { filter: brightness(0.72) saturate(0.9); }
+  #bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; background: linear-gradient(160deg, #0b1226, #060a18); }
+  .bg-img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 900ms ease; }
+  .bg-img.is-active { opacity: 1; }
+  #bg::after { content: ''; position: absolute; inset: 0; z-index: 3; background: linear-gradient(180deg, rgba(4,8,20,.25), rgba(4,8,20,.62)); }
+  #bg-scene { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; pointer-events: none; font-weight: 900; }
+  #bg-scene.is-fallback { opacity: 1; background-image: linear-gradient(160deg, #2b6cff 0%, #7a3bff 52%, rgba(5,9,22,.94) 100%); }
+  #bg-scene.is-fallback::after { content: attr(data-char); font-size: clamp(90px, 24vw, 300px); color: rgba(255,255,255,.26); }
+  #card { position: relative; z-index: 2; align-self: center; justify-self: center; text-align: center; padding: 18px 26px; border-radius: 22px; background: rgba(8,14,30,.55); backdrop-filter: blur(8px); }
+  #card.is-entering { animation: card-in 700ms ease both; }
+  @keyframes card-in { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+  #city-zh { font-size: clamp(34px, 7vw, 82px); margin: 0; }
+  #city-en { margin: 0; opacity: .8; font-size: clamp(14px, 2vw, 24px); }
+  #weather-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 6px 0; }
+  #weather-icon { width: 72px; height: 72px; display: grid; place-items: center; }
+  #weather-zh { font-size: clamp(20px, 3vw, 34px); font-weight: 800; }
+  #weather-en { opacity: .8; margin-left: 8px; }
+  #temp-row { display: flex; align-items: baseline; justify-content: center; gap: 10px; }
+  #temp-c { font-size: clamp(40px, 9vw, 96px); font-weight: 900; }
+  #temp-f { font-size: clamp(16px, 2.4vw, 26px); font-weight: 800; opacity: .9; }
+  #temp-row > .temp-range { font-size: clamp(14px, 1.6vw, 20px) !important; opacity: .85; }
+  #meta-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; font-size: clamp(12px, 1.5vw, 18px); opacity: .9; }
+  #hud { position: relative; z-index: 2; padding: 10px 16px 16px; }
+  #progress-track { height: 10px; border-radius: 999px; background: rgba(255,255,255,.18); overflow: hidden; }
+  #progress-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #ffd166, #ff8f4d); transition: width 320ms ease; }
+  #hud-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+  #hud-buttons button { min-width: 56px; min-height: 56px; font-size: 20px; border-radius: 14px; }
+  #start-overlay { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(4,8,20,.72); transition: opacity 300ms ease; }
+  #start-overlay.is-hidden { opacity: 0; pointer-events: none; }
+  #start-overlay[hidden] { display: none; }
+  #report { padding: 18px 22px 60px; }
+  #summary { font-size: 20px; font-weight: 800; padding: 10px 14px; border-radius: 12px; background: #16213c; display: inline-block; }
+  #summary.ok { background: #10402a; color: #7cf0b0; }
+  #summary.bad { background: #4a1420; color: #ff9aa9; }
+  #log { white-space: pre-wrap; font: 13px/1.55 ui-monospace, Consolas, monospace; background: #0d1428; padding: 14px; border-radius: 12px; max-height: 60vh; overflow: auto; }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div id="app" data-weather="sun">
+    <div id="bg">
+      <img id="bg-img-a" class="bg-img is-active" alt="">
+      <img id="bg-img-b" class="bg-img" alt="">
+    </div>
+    <div id="bg-scene" aria-hidden="true"></div>
+    <main id="card" aria-live="polite">
+      <div id="card-day" class="day-label"></div>
+      <h1 id="city-zh"></h1>
+      <p id="city-en"></p>
+      <div id="weather-row">
+        <div id="weather-icon"></div>
+        <div class="weather-text"><span id="weather-zh"></span><span id="weather-en"></span></div>
+      </div>
+      <div id="temp-row"><span id="temp-c"></span><span id="temp-f"></span></div>
+      <div id="meta-row"><span id="local-time"></span><span id="precip"></span><span id="wind"></span></div>
+    </main>
+    <footer id="hud">
+      <div id="progress-track"><div id="progress-fill"></div></div>
+      <div id="hud-row">
+        <span id="progress-text"></span>
+        <div id="hud-buttons">
+          <button id="btn-prev" type="button" aria-label="上一个城市">⏮</button>
+          <button id="btn-play" type="button" aria-label="暂停或继续">⏸</button>
+          <button id="btn-next" type="button" aria-label="下一个城市">⏭</button>
+          <button id="btn-music" type="button" aria-label="背景音乐开关">🎵</button>
+          <button id="btn-shuffle" type="button" aria-label="重新随机排序">🔀</button>
+        </div>
+        <span id="status-text"></span>
+      </div>
+    </footer>
+    <div id="start-overlay">
+      <div class="start-panel">
+        <div class="start-title">天气播报</div>
+        <div class="start-sub">Weather Roulette</div>
+        <button id="btn-start" type="button">▶ 开始播报</button>
+        <p id="start-hint"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="report">
+  <div id="summary">running…</div>
+  <pre id="log"></pre>
+</section>
+
+<script type="module">
+import { SpeechSequencer, gapBetween } from '../js/audio/speech.js';
+import { Broadcaster } from '../js/audio/player.js';
+import { MusicPlayer } from '../js/audio/music.js';
+import { Screen } from '../js/ui/screen.js';
+import { describeCard } from '../js/core/format.js';
+import { AUDIO } from '../js/core/constants.js';
+import { audioUrlFor, manifestHas } from '../js/audio/manifest.js';
+
+// ------------------------------------------------------------------ 测试框架
+let pass = 0, fail = 0;
+const lines = [];
+const logEl = document.getElementById('log');
+const summaryEl = document.getElementById('summary');
+function out(text) { lines.push(text); logEl.textContent = lines.join('\n'); }
+function section(title) { out(''); out('── ' + title + ' ' + '─'.repeat(Math.max(0, 56 - title.length))); }
+function check(name, cond, extra) {
+  if (cond) { pass++; out('PASS  ' + name); }
+  else { fail++; out('FAIL  ' + name + (extra !== undefined ? '  :: ' + extra : '')); }
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function until(fn, ms) { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (fn()) return true; await sleep(4); } return false; }
+
+// ------------------------------------------------- 假音频：自带「重叠」侦测
+const active = new Set();
+const overlaps = [];
+const history = [];
+class FakeAudio {
+  constructor(src, ms) {
+    this.src = src; this.duration = (ms || 30) / 1000; this.currentTime = 0;
+    this.volume = 1; this.paused = true; this._l = {}; this._t = null;
+  }
+  addEventListener(t, fn) { (this._l[t] = this._l[t] || []).push(fn); }
+  removeEventListener(t, fn) { if (this._l[t]) this._l[t] = this._l[t].filter((x) => x !== fn); }
+  _emit(t) { for (const fn of (this._l[t] || []).slice()) fn({ type: t }); }
+  play() {
+    if (active.size > 0 && !active.has(this)) {
+      overlaps.push({ playing: [...active].map((a) => a.src), next: this.src });
+    }
+    active.add(this); this.paused = false; history.push(['play', this.src]);
+    this._t = setTimeout(() => { this._t = null; active.delete(this); this.paused = true; this._emit('ended'); }, this.duration * 1000);
+    return Promise.resolve();
+  }
+  pause() {
+    if (this._t) { clearTimeout(this._t); this._t = null; }
+    active.delete(this); this.paused = true; history.push(['pause', this.src]);
+  }
+}
+class FakeLoader {
+  constructor(files, opt = {}) {
+    this.files = new Set(files);
+    this.fail = new Set(opt.fail || []);
+    this.hang = new Set(opt.hang || []);
+    this.ms = opt.ms || 20;
+    this.clips = new Map();
+    this.calls = [];
+  }
+  has(src) { return this.clips.has(src); }
+  get(src) { return this.clips.get(src) ?? null; }
+  load(src) {
+    this.calls.push(src);
+    if (this.clips.has(src)) return Promise.resolve(this.clips.get(src));
+    if (this.hang.has(src)) return new Promise(() => {});
+    if (this.fail.has(src) || !this.files.has(src)) return Promise.reject(new Error('fake load failure'));
+    const a = new FakeAudio(src, this.ms);
+    this.clips.set(src, a);
+    return Promise.resolve(a);
+  }
+  async preloadAll(srcs) {
+    const r = await Promise.allSettled([...new Set(srcs)].map((s) => this.load(s)));
+    return { ok: r.filter((x) => x.status === 'fulfilled').length, failed: [] };
+  }
+}
+const mkey = (u) => u.replace(/^assets\/audio\//, '');
+const manifestOf = (urls) => { const files = {}; for (const u of urls) files[mkey(u)] = { kind: 'x', key: 'x' }; return { version: 1, files }; };
+const makeCard = (city, code, tMax, tMin, dayIndex = 0) => ({ city, day: { code, tMax, tMin, precip: 42, wind: 11 }, dayIndex });
+const urlsOfCard = (card) => describeCard(card).segments.map(audioUrlFor);
+
+const onePxPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+const brokenImg = 'data:image/png;base64,not-a-real-image';
+
+// ------------------------------------------------------------------ 跑测试
+async function main() {
+  const [citiesFile, audioManifest] = await Promise.all([
+    fetch('../data/cities.json').then((r) => r.json()),
+    fetch('../assets/audio/manifest.json').then((r) => r.json()),
+  ]);
+  const cities = citiesFile.cities;
+  const bj = cities.find((c) => c.id === 'beijing') || cities[0];
+  const sh = cities.find((c) => c.id === 'shanghai') || cities[1];
+  const tk = cities.find((c) => c.id === 'tokyo') || cities[2];
+  out('城市库 ' + cities.length + ' 座；音频清单 ' + Object.keys(audioManifest.files || {}).length + ' 个片段（' + JSON.stringify(audioManifest.counts) + '）');
+
+  section('A. 相邻片段停顿规则（读常量，不写死）');
+  check('city → weather = gapCityToWeather(' + AUDIO.gapCityToWeather + ')', gapBetween({ kind: 'city' }, { kind: 'weather' }) === AUDIO.gapCityToWeather);
+  check('weather → temp = gapWeatherToTemp(' + AUDIO.gapWeatherToTemp + ')', gapBetween({ kind: 'weather' }, { kind: 'temp' }) === AUDIO.gapWeatherToTemp);
+  check('temp → word = gapWeatherToTemp', gapBetween({ kind: 'temp' }, { kind: 'word' }) === AUDIO.gapWeatherToTemp);
+  check('word → temp = gapWeatherToTemp', gapBetween({ kind: 'word' }, { kind: 'temp' }) === AUDIO.gapWeatherToTemp);
+  check('weather → weather = gapWeatherToTemp', gapBetween({ kind: 'weather' }, { kind: 'weather' }) === AUDIO.gapWeatherToTemp);
+
+  section('B. 真实清单：每句 6 个片段全部能解析到（温度不再被丢）');
+  {
+    const card = makeCard(bj, 0, 24, 12);
+    const segs = describeCard(card).segments;
+    const hits = segs.map((s) => s.kind + '/' + s.key + (manifestHas(audioManifest, s) ? '✓' : '✗'));
+    check('北京 晴 12~24 的 6 段全部命中清单', segs.every((s) => manifestHas(audioManifest, s)), hits.join(' '));
+    check('片段顺序 = city,weather,temp,word,temp,word', segs.map((s) => s.kind).join(',') === 'city,weather,temp,word,temp,word', segs.map((s) => s.kind).join(','));
+    check('temp 键解析成单 t 路径（不是 tt12）', audioUrlFor({ kind: 'temp', key: 't12' }).endsWith('/temp/t12.mp3'), audioUrlFor({ kind: 'temp', key: 't12' }));
+    let total = 0, bad = 0; const samples = [];
+    for (const city of cities) {
+      for (const code of [0, 2, 3, 45, 51, 63, 65, 71, 75, 80, 95, 99]) {
+        for (const [tMax, tMin] of [[40, -8], [24, 12]]) {
+          for (const s of describeCard(makeCard(city, code, tMax, tMin)).segments) {
+            total++;
+            if (!manifestHas(audioManifest, s)) { bad++; if (samples.length < 3) samples.push(city.id + '/' + code + '/' + s.kind + '/' + s.key); }
+          }
+        }
+      }
+    }
+    check('穷举 ' + total + ' 个片段全部命中清单', bad === 0, samples.join(' | '));
+  }
+
+  section('C. 顺序播完一整句（真实 describeCard → audioUrlFor 链路）');
+  {
+    const card = makeCard(bj, 0, 24, 12);
+    const urls = urlsOfCard(card);
+    const loader = new FakeLoader(urls, { ms: 15 });
+    const seq = new SpeechSequencer(loader, { manifest: audioManifest });
+    const seen = [];
+    const t0 = Date.now();
+    const res = await seq.speak(describeCard(card).segments, { onProgress: (p) => seen.push(p.kind + ':' + p.key) });
+    const ms = Date.now() - t0;
+    check('played = 6 段', res.played.length === 6, JSON.stringify(res.played.map((p) => p.key)));
+    check('skipped = 0', res.skipped.length === 0, JSON.stringify(res.skipped));
+    check('未中断', res.aborted === false);
+    check('onProgress 6 次', seen.length === 6, seen.join('|'));
+    check('句尾等了 gapBetweenCities(' + AUDIO.gapBetweenCities + 'ms)', ms >= AUDIO.gapBetweenCities + 80, ms + 'ms');
+    check('无声音重叠', overlaps.length === 0, JSON.stringify(overlaps));
+  }
+
+  section('D. 失败片段必须跳过并继续（清单缺失 / 加载抛错 / 加载卡死）');
+  {
+    const card = makeCard(bj, 0, 24, 12);
+    const urls = urlsOfCard(card);
+    const brokenManifest = manifestOf(urls.filter((u) => u !== urls[0])); // 城市名不在清单
+    const loader = new FakeLoader(urls, { fail: [urls[3]], hang: [urls[2]], ms: 15 }); // dao 抛错, t12 卡死
+    const seq = new SpeechSequencer(loader, { manifest: brokenManifest, loadTimeout: 250 });
+    const t0 = Date.now();
+    const res = await seq.speak(describeCard(card).segments);
+    const ms = Date.now() - t0;
+    const reasons = res.skipped.map((s) => s.kind + '=' + s.reason).sort().join(' ');
+    check('清单缺失 → missing-in-manifest', res.skipped.some((s) => s.kind === 'city' && s.reason === 'missing-in-manifest'), reasons);
+    check('加载抛错 → load-failed', res.skipped.some((s) => s.kind === 'word' && s.reason === 'load-failed'), reasons);
+    check('加载卡死 → load-timeout', res.skipped.some((s) => s.reason === 'load-timeout'), reasons);
+    check('其余 3 段照播', res.played.length === 3, JSON.stringify(res.played.map((p) => p.kind)));
+    check('整句没有卡死（<3000ms）', ms < 3000, ms + 'ms');
+    check('未中断', res.aborted === false);
+    check('无声音重叠', overlaps.length === 0, JSON.stringify(overlaps));
+  }
+
+  section('E. AbortSignal 打断：立刻返回且没有重叠');
+  {
+    const card = makeCard(bj, 0, 24, 12);
+    const urls = urlsOfCard(card);
+    const loader = new FakeLoader(urls, { ms: 400 });
+    const seq = new SpeechSequencer(loader, { manifest: audioManifest });
+    const ctrl = new AbortController();
+    const p = seq.speak(describeCard(card).segments, { signal: ctrl.signal });
+    const playing = await until(() => active.size > 0, 1500);
+    const t0 = Date.now();
+    ctrl.abort();
+    const res = await p;
+    const ms = Date.now() - t0;
+    check('确实在播时打断', playing === true);
+    check('打断后立刻返回（<120ms）', ms < 120, ms + 'ms');
+    check('aborted = true', res.aborted === true);
+    check('打断后没有任何片段还在响', active.size === 0, [...active].map((a) => a.src).join(','));
+    check('被打断片段执行了 pause', history.some((h) => h[0] === 'pause' && h[1] === urls[0]));
+    check('无声音重叠', overlaps.length === 0, JSON.stringify(overlaps));
+  }
+
+  section('F. 连续打断 3 次：每次都不许和上一句重叠');
+  {
+    const files = urlsOfCard(makeCard(bj, 0, 24, 12)).concat(urlsOfCard(makeCard(sh, 61, 27, 18)));
+    const loader = new FakeLoader(files, { ms: 250 });
+    const seq = new SpeechSequencer(loader, { manifest: audioManifest });
+    let last = null;
+    for (let round = 0; round < 3; round++) {
+      const ctrl = new AbortController();
+      const card = round === 2 ? makeCard(bj, 0, 24, 12) : makeCard(sh, 61, 27, 18);
+      const p = seq.speak(describeCard(card).segments, { signal: ctrl.signal });
+      await until(() => active.size > 0, 900);
+      await sleep(30);
+      ctrl.abort();
+      last = await p;
+    }
+    check('三次都 aborted', last.aborted === true);
+    check('打断后无声音残留', active.size === 0, [...active].map((a) => a.src).join(','));
+    check('全程无重叠', overlaps.length === 0, JSON.stringify(overlaps));
+  }
+
+  // 加速时间常量，让整套流程测试几秒内跑完（B/C/D/E 已用真实常量跑过）
+  const realAUDIO = { ...AUDIO };
+  AUDIO.introDelay = 50; AUDIO.cardLeadIn = 25; AUDIO.gapCityToWeather = 8; AUDIO.gapWeatherToTemp = 10; AUDIO.gapBetweenCities = 40;
+
+  const cards = [makeCard(bj, 0, 24, 12), makeCard(sh, 61, 27, 18), makeCard(tk, 71, 2, 0)];
+  const allUrls = cards.flatMap(urlsOfCard);
+  const fullManifest = manifestOf(allUrls);
+
+  section('G. Broadcaster 全流程：hooks 顺序 + 音乐 + 进度');
+  {
+    const loader = new FakeLoader(allUrls, { ms: 12 });
+    const hookLog = [];
+    const musicCalls = [];
+    const music = { fadeIn: () => musicCalls.push('fadeIn'), fadeOut: () => musicCalls.push('fadeOut'), stop: () => musicCalls.push('stop') };
+    const progress = [];
+    const b = new Broadcaster({
+      cards, loader, music,
+      hooks: {
+        onCardStart: (i, card, total) => hookLog.push('start' + i + '/' + total),
+        onCardEnd: (i) => hookLog.push('end' + i),
+        onProgress: (info) => progress.push(info.phase),
+        onFinish: () => hookLog.push('finish'),
+        onError: (e) => hookLog.push('error:' + (e && e.message)),
+      },
+    });
+    b.speech.manifest = fullManifest;
+    const st = await b.start();
+    check('start() 返回时已经开始播（playing=true）', st.playing === true, JSON.stringify(st));
+    check('onCardStart 带第三个参数 total', hookLog[0] === 'start0/3', hookLog.join(','));
+    check('开场先 music.fadeIn()', musicCalls[0] === 'fadeIn', musicCalls.join(','));
+    const counts = (prefix) => history.filter((h) => h[0] === 'play' && h[1].includes(prefix)).length;
+    const citiesBefore = counts('/city/');
+    const tempsBefore = counts('/temp/');
+    await b.finished;
+    check('hooks 顺序 = start0,end0,start1,end1,start2,end2,finish', hookLog.join(',') === 'start0/3,end0,start1/3,end1,start2/3,end2,finish', hookLog.join(','));
+    check('onProgress 覆盖 lead-in / speak / card-end / end', ['lead-in', 'speak', 'card-end', 'end'].every((p) => progress.includes(p)), [...new Set(progress)].join(','));
+    check('无 onError', !hookLog.some((x) => x.startsWith('error')), hookLog.join(','));
+    check('三城的城市名都念了', counts('/city/') - citiesBefore === 3, String(counts('/city/') - citiesBefore));
+    check('三城的温度都念了（每城 2 段）', counts('/temp/') - tempsBefore === 6, String(counts('/temp/') - tempsBefore));
+    check('无声音重叠', overlaps.length === 0, JSON.stringify(overlaps));
+  }
+
+  section('H. next() 打断当前播报：不重叠、卡片立刻切过去');
+  {
+    const loader = new FakeLoader(allUrls, { ms: 350 });
+    const hookLog = [];
+    const b = new Broadcaster({
+      cards: cards.map((c) => ({ ...c })), loader, music: null,
+      hooks: { onCardStart: (i) => hookLog.push('start' + i), onCardEnd: (i) => hookLog.push('end' + i), onProgress: () => {}, onError: (e) => hookLog.push('error:' + e.message) },
+    });
+    b.speech.manifest = fullManifest;
+    await b.start();
+    const playing = await until(() => active.size > 0 && b.state.index === 0, 3000);
+    await sleep(70);
+    const t0 = Date.now();
+    await b.next();
+    const ms = Date.now() - t0;
+    check('确实在第 0 城播报中打断', playing === true);
+    check('next() 立刻返回（<250ms）', ms < 250, ms + 'ms');
+    check('state.index 切到 1', b.state.index === 1, JSON.stringify(b.state));
+    check('第 0 城没有 onCardEnd（被打断）', !hookLog.includes('end0'), hookLog.join(','));
+    check('第 1 城已 onCardStart', hookLog.includes('start1'), hookLog.join(','));
+    await sleep(80);
+    check('打断全程无重叠', overlaps.length === 0, JSON.stringify(overlaps));
+    b.pause();
+    await sleep(50);
+    check('pause() 后没有声音', active.size === 0, [...active].map((a) => a.src).join(','));
+    check('pause() 后 playing=false / paused=true', b.state.playing === false && b.state.paused === true, JSON.stringify(b.state));
+  }
+
+  section('I. pause → resume：从被打断的片段续播');
+  {
+    const loader = new FakeLoader(allUrls, { ms: 220 });
+    const speakIdx = [];
+    const b = new Broadcaster({
+      cards: cards.map((c) => ({ ...c })), loader, music: null,
+      hooks: { onCardStart: () => {}, onCardEnd: () => {}, onProgress: (p) => { if (p.phase === 'speak' && p.kind) speakIdx.push(p.index); }, onError: (e) => speakIdx.push('error:' + e.message) },
+    });
+    b.speech.manifest = fullManifest;
+    await b.start();
+    const got = await until(() => speakIdx.length >= 2, 4000);
+    b.pause();
+    await sleep(50);
+    const before = speakIdx.slice();
+    speakIdx.length = 0;
+    await b.resume();
+    const got2 = await until(() => speakIdx.length >= 1, 2500);
+    const resumedAt = speakIdx[0];
+    check('暂停前已播 2+ 段', got === true, before.join(','));
+    check('resume 从被打断的片段续播（不是从头）', got2 === true && Number.isInteger(resumedAt) && resumedAt >= 2, 'before=' + before.join(',') + ' resumedAt=' + resumedAt);
+    check('resume 后 playing=true / paused=false', b.state.playing === true && b.state.paused === false, JSON.stringify(b.state));
+    check('无声音重叠', overlaps.length === 0, JSON.stringify(overlaps));
+    b.stop();
+  }
+
+  section('J. main.js 模式：cardsProvider + onPassEnd 自动开下一轮');
+  {
+    const pass1 = [makeCard(bj, 0, 24, 12), makeCard(sh, 61, 27, 18)];
+    const pass2 = [makeCard(tk, 71, 2, 0), makeCard(bj, 2, 26, 14)];
+    let pulled = 0;
+    const all2 = pass1.concat(pass2).flatMap(urlsOfCard);
+    const loader = new FakeLoader(all2, { ms: 12 });
+    const hookLog = [];
+    const b = new Broadcaster({
+      cardsProvider: () => { pulled++; return pulled === 1 ? pass1 : pass2; },
+      loader, music: null,
+      hooks: {
+        onCardStart: (i, card, total) => hookLog.push('start' + i + '/' + total),
+        onCardEnd: () => {},
+        onProgress: () => {},
+        onPassEnd: (i, total) => hookLog.push('passEnd' + i + '/' + total),
+        onFinish: () => hookLog.push('finish'),
+        onError: (e) => hookLog.push('error:' + e.message),
+      },
+    });
+    b.speech.manifest = manifestOf(all2);
+    await b.start();
+    await until(() => hookLog.filter((x) => x.startsWith('passEnd')).length >= 2, 8000);
+    const passes = hookLog.filter((x) => x.startsWith('passEnd')).length;
+    check('cardsProvider 被调用取第一批', pulled >= 1, String(pulled));
+    check('第一轮结束发了 onPassEnd(1,2)', passes >= 1 && hookLog.includes('passEnd1/2'), hookLog.join(','));
+    check('自动开了第二轮（start0/2 出现过 2 次）', hookLog.filter((x) => x === 'start0/2').length >= 2, hookLog.join(','));
+    check('cardsProvider 模式下不发 onFinish', !hookLog.includes('finish'), hookLog.join(','));
+    check('两轮之间没有声音重叠', overlaps.length === 0, JSON.stringify(overlaps));
+    b.stop();
+  }
+
+  section('K. Screen：DOM 契约渲染 + 背景交叉淡入 + 插画兜底');
+  {
+    const screen = new Screen(document);
+    const card = makeCard(bj, 0, 24, 12, 1);
+    const desc = describeCard(card);
+    screen.renderCard(desc, { city: bj, imageUrls: [], dayIndex: 1, cardIndex: 3, total: 8 });
+    const app = document.getElementById('app');
+    check('#app data-weather = 天气图标键', app.dataset.weather === desc.weather.icon, app.dataset.weather);
+    check('#app 昼夜类（is-night 或白天）', typeof app.classList.contains('is-night') === 'boolean');
+    check('#city-zh 正确', document.getElementById('city-zh').textContent === bj.zh, document.getElementById('city-zh').textContent);
+    check('#city-en 正确', document.getElementById('city-en').textContent === bj.en, document.getElementById('city-en').textContent);
+    check('#weather-zh / #weather-en 成对', document.getElementById('weather-zh').textContent === desc.weather.zh && document.getElementById('weather-en').textContent === desc.weather.en);
+    check('#temp-c 主数字 + °C 上标', document.getElementById('temp-c').textContent.trim().startsWith(String(desc.hi)) && document.getElementById('temp-c').querySelector('sup')?.textContent === '°C', document.getElementById('temp-c').textContent);
+    check('#temp-f 用换算值', document.getElementById('temp-f').textContent.endsWith('°F'), document.getElementById('temp-f').textContent);
+    check('#temp-row 显示低温区间 .temp-range', !!document.querySelector('#temp-row > .temp-range'), document.querySelector('#temp-row > .temp-range')?.textContent);
+    check('#card-day 中英对照', /今天|明天|后天/.test(document.getElementById('card-day').textContent) && /Today|Tomorrow|Day After/.test(document.getElementById('card-day').textContent), document.getElementById('card-day').textContent);
+    check('#local-time 有当地时间', /当地时间 \d{2}:\d{2}/.test(document.getElementById('local-time').textContent), document.getElementById('local-time').textContent);
+    check('#precip / #wind 有值', document.getElementById('precip').textContent.includes('%') && document.getElementById('wind').textContent.includes('km/h'));
+    check('#progress-fill 宽度 = 4/8', parseFloat(document.getElementById('progress-fill').style.width) === 50, document.getElementById('progress-fill').style.width);
+    check('#progress-text = 4 / 8', document.getElementById('progress-text').textContent === '4 / 8', document.getElementById('progress-text').textContent);
+    const iconOk = await until(() => document.getElementById('weather-icon').childElementCount > 0, 2500);
+    check('#weather-icon 有内容（真实 weather-icon.js 或 emoji 兜底）', iconOk, document.getElementById('weather-icon').innerHTML.slice(0, 80));
+    // 无候选图 → 插画兜底（style.css 约定的 #bg-scene.is-fallback + data-char）
+    const scene = document.getElementById('bg-scene');
+    await until(() => scene.classList.contains('is-fallback'), 1500);
+    check('无图时 #bg-scene 加 .is-fallback 且 data-char 是城市首字', scene.classList.contains('is-fallback') && scene.dataset.char === bj.zh.slice(0, 1), scene.className + '/' + scene.dataset.char);
+    check('兜底时照片层全部 is-active 移除', !document.getElementById('bg-img-a').classList.contains('is-active') && !document.getElementById('bg-img-b').classList.contains('is-active'));
+    // 好图 → 交叉淡入到另一张
+    const a = document.getElementById('bg-img-a'), bImg = document.getElementById('bg-img-b');
+    const crossed = () => a.classList.contains('is-active') !== bImg.classList.contains('is-active');
+    const okBg = await screen.setBackground(onePxPng);
+    const crossedOk = await until(crossed, 2500);
+    check('setBackground 返回 true', okBg === true, String(okBg));
+    check('交叉淡入：换成另一张 img 的 is-active', crossedOk, a.className + '|' + bImg.className);
+    check('有照片后收起 .is-fallback', !scene.classList.contains('is-fallback'), scene.className);
+    // 坏图 + 无候选 → 回到插画兜底
+    const badBg = await screen.setBackground(brokenImg);
+    const backToFallback = await until(() => scene.classList.contains('is-fallback'), 2500);
+    check('坏图时回到插画兜底（返回 false）', badBg === false && backToFallback, String(badBg) + '/' + scene.className);
+    // 状态 / 进度 / 暂停 / 播放
+    screen.setStatus('自测状态');
+    check('#status-text 更新', document.getElementById('status-text').textContent === '自测状态');
+    screen.setPaused(true);
+    check('setPaused(true) 加 .is-paused', app.classList.contains('is-paused'));
+    screen.setPlaying(true);
+    check('setPlaying(true) 加 .is-playing 且隐藏遮罩', app.classList.contains('is-playing') && document.getElementById('start-overlay').classList.contains('is-hidden'));
+    screen.setProgress(7, 8);
+    check('setProgress 收尾 100%', parseFloat(document.getElementById('progress-fill').style.width) === 100, document.getElementById('progress-fill').style.width);
+    check('越界 setProgress 不炸', (screen.setProgress(99, 8), true));
+  }
+
+  section('L. MusicPlayer：静默失败、淡入淡出不爆音');
+  {
+    const played = [];
+    class FakeMusicAudio {
+      constructor() { this.volume = 1; this.paused = true; this.currentTime = 0; this.src = ''; this._l = {}; }
+      addEventListener(t, fn) { (this._l[t] = this._l[t] || []).push(fn); }
+      removeEventListener() {}
+      removeAttribute() {}
+      load() {}
+      play() { played.push('play'); this.paused = false; return Promise.resolve(); }
+      pause() { played.push('pause'); this.paused = true; }
+    }
+    class RejectAudio extends FakeMusicAudio {
+      play() { return Promise.reject(new Error('NotAllowedError')); }
+    }
+    const Orig = window.Audio;
+    try {
+      window.Audio = FakeMusicAudio;
+      const m = new MusicPlayer('assets/audio/music/yuzhouchangwan.mp3', { volume: AUDIO.musicVolume, fadeMs: 100 });
+      const ok = await m.start();
+      await sleep(140);
+      check('start() 后 playing=true 且淡入到 musicVolume', ok === true && m.playing === true && Math.abs(m.volume - AUDIO.musicVolume) < 0.02, String(m.volume));
+      m.pause();
+      await sleep(180);
+      check('pause() 淡出后音量 0 且真的 pause', m.playing === false && m.volume === 0 && played.includes('pause'), played.join(','));
+      await m.resume();
+      await sleep(140);
+      check('resume() 淡回原音量', Math.abs(m.volume - AUDIO.musicVolume) < 0.02 && m.playing === true, String(m.volume));
+      m.destroy();
+      window.Audio = RejectAudio;
+      const blocked = new MusicPlayer('x.mp3', { fadeMs: 60 });
+      const r = await blocked.start();
+      check('autoplay 被拒：静默失败不抛异常', r === false && blocked.blocked === true && blocked.playing === false, JSON.stringify({ r, blocked: blocked.blocked }));
+      blocked.destroy();
+    } finally {
+      window.Audio = Orig;
+    }
+  }
+
+  // 还原真实常量，避免影响后续手动试听
+  Object.assign(AUDIO, realAUDIO);
+
+  // ---------------------------------------------------------------- 可选：真实页面端到端
+  // 默认不跑（依赖网络与真实音频解码，比较慢）。加 ?e2e=1 打开：
+  //   http://localhost:8137/tools/self-test.html?e2e=1
+  // 无头浏览器加 --autoplay-policy=no-user-gesture-required 才能真的出声。
+  if (new URLSearchParams(location.search).get('e2e') === '1') {
+    section('M. 真实 index.html 端到端（iframe；main.js 的 cardsProvider 模式）');
+    // 注意：这一节必须在「真实时间」下跑。加 --virtual-time-budget 的无头浏览器会快进定时器，
+    // 但媒体播放时钟不会跟着快进，<audio> 的 ended 永远不来，卡片自然不会推进。
+    // 所以这里的结果用 beacon 回报（见文件末尾），跑法：
+    //   chrome --headless=new --autoplay-policy=no-user-gesture-required \
+    //          http://localhost:8137/tools/self-test.html?e2e=1
+    const frame = document.createElement('iframe');
+    frame.id = 'e2e-frame';
+    frame.style.cssText = 'position:absolute;left:-99999px;top:0;width:1280px;height:800px;border:0;';
+    frame.src = '../index.html';
+    document.body.append(frame);
+    try {
+      const booted = await until(() => {
+        try {
+          const d = frame.contentDocument;
+          return Boolean(d && d.getElementById('btn-start') && /点击开始/.test(d.getElementById('start-hint')?.textContent || ''));
+        } catch { return false; }
+      }, 20000);
+      check('index.html 启动完成（开始提示已写入）', booted);
+      const doc = frame.contentDocument;
+      doc.getElementById('btn-start').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const firstShown = await until(() => (doc.getElementById('city-zh')?.textContent || '').trim().length > 0, 15000);
+      check('点击开始后渲染出第一座城市', firstShown, doc.getElementById('city-zh')?.textContent);
+      const zh1 = doc.getElementById('city-zh').textContent;
+      const province = await until(() => doc.getElementById('city-zh').textContent !== zh1, 25000);
+      check('播报自动推进到下一城', province, zh1 + ' → ' + doc.getElementById('city-zh').textContent);
+      check('进度条有推进', parseFloat(doc.getElementById('progress-fill').style.width) > 0, doc.getElementById('progress-fill').style.width);
+      check('没有出现错误遮罩', !doc.getElementById('error-overlay'), doc.getElementById('error-overlay')?.textContent);
+    } finally {
+      frame.remove();
+    }
+  } else {
+    out('');
+    out('（端到端测试默认关闭：加 ?e2e=1 可在真实 index.html 的 iframe 里跑一遍 main.js）');
+  }
+
+  section('汇总');
+  out('真实常量：gapCityToWeather=' + AUDIO.gapCityToWeather + 'ms, gapWeatherToTemp=' + AUDIO.gapWeatherToTemp
+    + 'ms, gapBetweenCities=' + AUDIO.gapBetweenCities + 'ms, introDelay=' + AUDIO.introDelay
+    + 'ms, cardLeadIn=' + AUDIO.cardLeadIn + 'ms, musicVolume=' + AUDIO.musicVolume + ', voiceVolume=' + AUDIO.voiceVolume);
+  const okAll = fail === 0;
+  out(okAll ? 'ALL-PASS  共 ' + pass + ' 项断言全部通过' : 'HAS-FAILURE  通过 ' + pass + ' 项，失败 ' + fail + ' 项');
+  summaryEl.textContent = okAll ? ('ALL-PASS ' + pass + '/' + pass) : ('HAS-FAILURE ' + pass + ' pass / ' + fail + ' fail');
+  summaryEl.className = okAll ? 'ok' : 'bad';
+  document.title = summaryEl.textContent;
+  window.__SELFTEST__ = { pass, fail };
+
+  // 无头浏览器没有 --dump-dom 时（需要真实时间跑 e2e），把结果 beacon 回静态服务器，
+  // 从 python -m http.server 的控制台日志里就能读到这一行。
+  if (new URLSearchParams(location.search).get('e2e') === '1') {
+    const failLines = lines.filter((l) => /^FAIL|^EXCEPTION/.test(l)).slice(0, 4).join(' | ').slice(0, 400);
+    const q = new URLSearchParams({ selftest: '1', pass: String(pass), fail: String(fail), detail: failLines });
+    fetch('/__selftest_beacon?' + q.toString()).catch(() => {});
+  }
+}
+
+main().catch((err) => {
+  fail++;
+  out('EXCEPTION  ' + (err && err.stack ? err.stack : err));
+  summaryEl.textContent = 'HAS-FAILURE (exception)';
+  summaryEl.className = 'bad';
+  document.title = 'HAS-FAILURE';
+});
+</script>
+</body>
+</html>

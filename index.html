@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a1020">
+  <meta name="description" content="天气播报 Weather Roulette：一张满屏城市壁纸 + 居中大字，自动轮播的中英双语天气播报。">
+  <title>天气播报 · Weather Roulette</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23ffd166'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<!--
+  极简版 DOM 契约（id 与层级不可改）：js/ui/screen.js、js/main.js 都按 id 取节点。
+  设计只有两层：满屏城市壁纸 + 居中大字前景。没有蒙版、没有面板、没有进度条与控制按钮。
+  1) 文字颜色自动适配壁纸：screen.js 在 #app 上写 data-text-on="light|dark"（CSS 见 style.css 第 2 节）。
+     初值给 "dark"（深色壁纸 → 白字）。
+  2) #sr-only-status 是隐藏状态位（屏幕阅读器 + 自动化测试），main.js 往里写状态文字，不要删、
+     也不要让它可见；style.css 里已做 sr-only 处理，去掉 hidden 属性也不会显示。
+  3) #btn-music 极不打扰但必须可点（≥56px 热区）；#start-overlay 是音频解锁遮罩，不可删。
+-->
+<body>
+  <div id="app" data-weather="sun" data-text-on="dark">
+
+    <!-- 城市实景照片层：#bg-img-a / #bg-img-b 交叉淡入（900ms），由 screen.js 的 setBackground() 驱动 -->
+    <div id="bg">
+      <img id="bg-img-a" class="bg-img is-active" alt="" decoding="async" fetchpriority="high">
+      <img id="bg-img-b" class="bg-img" alt="" decoding="async">
+    </div>
+
+    <!-- 图片全部加载失败时的插画兜底层（screen.js 加 .is-fallback + data-char）；正常有照片时完全不可见 -->
+    <div id="bg-scene" aria-hidden="true"></div>
+
+    <!-- 前景：居中大字。没有面板底色 / 边框 / 模糊，文字直接压在照片上 -->
+    <main id="card" aria-live="polite">
+      <div id="card-day" class="day-label"></div>
+      <h1 id="city-zh"></h1>
+      <p id="city-en"></p>
+      <div id="weather-row">
+        <div id="weather-icon"></div>
+        <div class="weather-text">
+          <span id="weather-zh"></span>
+          <span id="weather-en"></span>
+        </div>
+      </div>
+      <div id="temp-row">
+        <span id="temp-c"></span>
+      </div>
+    </main>
+
+    <!-- 音乐开关：右上角纯图标，默认很淡（opacity .35），hover/focus/tap 才到 1 -->
+    <button id="btn-music" type="button" aria-label="背景音乐开关" aria-pressed="true">🎵</button>
+
+    <!-- 音频解锁遮罩：浏览器禁止自动播放，必须由用户点一下「开始播报」。
+         隐藏方式（CSS 都支持）：加 .is-hidden / .is-gone 类，或 #app 加 .is-started，或加 hidden 属性。 -->
+    <div id="start-overlay">
+      <div class="start-panel">
+        <div class="start-title">天气播报</div>
+        <div class="start-sub">Weather Roulette</div>
+        <button id="btn-start" type="button">▶ 开始播报</button>
+        <p id="start-hint"></p>
+      </div>
+    </div>
+
+    <!-- 隐藏状态位：给屏幕阅读器与自动化测试用，视觉上永远不可见 -->
+    <div id="sr-only-status" role="status" aria-live="polite" hidden></div>
+
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

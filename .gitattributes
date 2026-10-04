@@ -1,0 +1,18 @@
+# 统一换行符，避免 Windows 上 checkout 出 CRLF 造成跨平台 diff 噪音
+* text=auto eol=lf
+
+# 二进制资源不要做任何换行转换
+*.mp3 binary
+*.wav binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+
+# GitHub 语言统计：把这几个当文档而不是代码
+*.md linguist-documentation
+data/*.json linguist-generated
+assets/audio/manifest.json linguist-generated
+assets/images/manifest.json linguist-generated
+assets/images/luminance.json linguist-generated

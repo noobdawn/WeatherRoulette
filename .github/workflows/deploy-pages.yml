@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个部署，新的推送取消排队中的旧任务，但不打断正在跑的部署
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 校验资源完整性
+        run: |
+          set -e
+          test -f index.html
+          test -f sw.js
+          test -f data/cities.json
+          test -f assets/audio/manifest.json
+          test -f assets/images/manifest.json
+          COUNT=$(ls assets/audio/zh/city/*.mp3 | wc -l)
+          echo "城市语音片段：$COUNT 个"
+          test "$COUNT" -ge 81
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

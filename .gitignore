@@ -1,0 +1,19 @@
+# 依赖与缓存
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# 本地试听用的无损副本（体积大，不部署；网页用 mp3）
+assets/audio/music/*.wav
+assets/audio/music/preview-*
+
+# 测试临时产物
+tools/last-dom.html
+tools/shots/
+tools/_probe/
+
+# 编辑器
+.vscode/
+.idea/

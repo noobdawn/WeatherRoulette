@@ -1,0 +1,731 @@
+{
+  "version": 1,
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "-8%",
+  "generatedAt": "2026-10-04T21:17:40+08:00",
+  "counts": {
+    "city": 81,
+    "weather": 14,
+    "temp": 43,
+    "word": 3
+  },
+  "tempRange": [
+    0,
+    42
+  ],
+  "music": [
+    "yuzhouchangwan.mp3"
+  ],
+  "files": {
+    "music/yuzhouchangwan.mp3": {
+      "kind": "music",
+      "key": "yuzhouchangwan.mp3",
+      "size": 1446181
+    },
+    "zh/city/amsterdam.mp3": {
+      "kind": "city",
+      "key": "amsterdam",
+      "size": 11376
+    },
+    "zh/city/auckland.mp3": {
+      "kind": "city",
+      "key": "auckland",
+      "size": 9072
+    },
+    "zh/city/barcelona.mp3": {
+      "kind": "city",
+      "key": "barcelona",
+      "size": 10512
+    },
+    "zh/city/beijing.mp3": {
+      "kind": "city",
+      "key": "beijing",
+      "size": 8064
+    },
+    "zh/city/berlin.mp3": {
+      "kind": "city",
+      "key": "berlin",
+      "size": 8064
+    },
+    "zh/city/busan.mp3": {
+      "kind": "city",
+      "key": "busan",
+      "size": 8640
+    },
+    "zh/city/changchun.mp3": {
+      "kind": "city",
+      "key": "changchun",
+      "size": 8640
+    },
+    "zh/city/changsha.mp3": {
+      "kind": "city",
+      "key": "changsha",
+      "size": 8352
+    },
+    "zh/city/chengdu.mp3": {
+      "kind": "city",
+      "key": "chengdu",
+      "size": 8208
+    },
+    "zh/city/chicago.mp3": {
+      "kind": "city",
+      "key": "chicago",
+      "size": 9504
+    },
+    "zh/city/chongqing.mp3": {
+      "kind": "city",
+      "key": "chongqing",
+      "size": 8496
+    },
+    "zh/city/copenhagen.mp3": {
+      "kind": "city",
+      "key": "copenhagen",
+      "size": 10512
+    },
+    "zh/city/dalian.mp3": {
+      "kind": "city",
+      "key": "dalian",
+      "size": 8352
+    },
+    "zh/city/dongguan.mp3": {
+      "kind": "city",
+      "key": "dongguan",
+      "size": 8352
+    },
+    "zh/city/edinburgh.mp3": {
+      "kind": "city",
+      "key": "edinburgh",
+      "size": 9360
+    },
+    "zh/city/foshan.mp3": {
+      "kind": "city",
+      "key": "foshan",
+      "size": 8640
+    },
+    "zh/city/frankfurt.mp3": {
+      "kind": "city",
+      "key": "frankfurt",
+      "size": 10656
+    },
+    "zh/city/fuzhou.mp3": {
+      "kind": "city",
+      "key": "fuzhou",
+      "size": 8640
+    },
+    "zh/city/guangzhou.mp3": {
+      "kind": "city",
+      "key": "guangzhou",
+      "size": 8352
+    },
+    "zh/city/guiyang.mp3": {
+      "kind": "city",
+      "key": "guiyang",
+      "size": 8208
+    },
+    "zh/city/haikou.mp3": {
+      "kind": "city",
+      "key": "haikou",
+      "size": 8496
+    },
+    "zh/city/hangzhou.mp3": {
+      "kind": "city",
+      "key": "hangzhou",
+      "size": 8496
+    },
+    "zh/city/harbin.mp3": {
+      "kind": "city",
+      "key": "harbin",
+      "size": 8640
+    },
+    "zh/city/hefei.mp3": {
+      "kind": "city",
+      "key": "hefei",
+      "size": 8496
+    },
+    "zh/city/helsinki.mp3": {
+      "kind": "city",
+      "key": "helsinki",
+      "size": 10512
+    },
+    "zh/city/hohhot.mp3": {
+      "kind": "city",
+      "key": "hohhot",
+      "size": 10512
+    },
+    "zh/city/hongkong.mp3": {
+      "kind": "city",
+      "key": "hongkong",
+      "size": 8640
+    },
+    "zh/city/honolulu.mp3": {
+      "kind": "city",
+      "key": "honolulu",
+      "size": 9648
+    },
+    "zh/city/jinan.mp3": {
+      "kind": "city",
+      "key": "jinan",
+      "size": 7776
+    },
+    "zh/city/kunming.mp3": {
+      "kind": "city",
+      "key": "kunming",
+      "size": 8352
+    },
+    "zh/city/kyoto.mp3": {
+      "kind": "city",
+      "key": "kyoto",
+      "size": 8064
+    },
+    "zh/city/lanzhou.mp3": {
+      "kind": "city",
+      "key": "lanzhou",
+      "size": 8352
+    },
+    "zh/city/lhasa.mp3": {
+      "kind": "city",
+      "key": "lhasa",
+      "size": 8352
+    },
+    "zh/city/london.mp3": {
+      "kind": "city",
+      "key": "london",
+      "size": 8064
+    },
+    "zh/city/losangeles.mp3": {
+      "kind": "city",
+      "key": "losangeles",
+      "size": 9360
+    },
+    "zh/city/macau.mp3": {
+      "kind": "city",
+      "key": "macau",
+      "size": 7920
+    },
+    "zh/city/madrid.mp3": {
+      "kind": "city",
+      "key": "madrid",
+      "size": 9216
+    },
+    "zh/city/marseille.mp3": {
+      "kind": "city",
+      "key": "marseille",
+      "size": 8352
+    },
+    "zh/city/melbourne.mp3": {
+      "kind": "city",
+      "key": "melbourne",
+      "size": 8784
+    },
+    "zh/city/milan.mp3": {
+      "kind": "city",
+      "key": "milan",
+      "size": 7776
+    },
+    "zh/city/munich.mp3": {
+      "kind": "city",
+      "key": "munich",
+      "size": 9072
+    },
+    "zh/city/nanchang.mp3": {
+      "kind": "city",
+      "key": "nanchang",
+      "size": 8208
+    },
+    "zh/city/nanjing.mp3": {
+      "kind": "city",
+      "key": "nanjing",
+      "size": 8064
+    },
+    "zh/city/nanning.mp3": {
+      "kind": "city",
+      "key": "nanning",
+      "size": 8352
+    },
+    "zh/city/newyork.mp3": {
+      "kind": "city",
+      "key": "newyork",
+      "size": 8208
+    },
+    "zh/city/ningbo.mp3": {
+      "kind": "city",
+      "key": "ningbo",
+      "size": 8064
+    },
+    "zh/city/osaka.mp3": {
+      "kind": "city",
+      "key": "osaka",
+      "size": 8064
+    },
+    "zh/city/oslo.mp3": {
+      "kind": "city",
+      "key": "oslo",
+      "size": 9216
+    },
+    "zh/city/paris.mp3": {
+      "kind": "city",
+      "key": "paris",
+      "size": 8064
+    },
+    "zh/city/qingdao.mp3": {
+      "kind": "city",
+      "key": "qingdao",
+      "size": 8352
+    },
+    "zh/city/reykjavik.mp3": {
+      "kind": "city",
+      "key": "reykjavik",
+      "size": 11952
+    },
+    "zh/city/rome.mp3": {
+      "kind": "city",
+      "key": "rome",
+      "size": 7920
+    },
+    "zh/city/sanfrancisco.mp3": {
+      "kind": "city",
+      "key": "sanfrancisco",
+      "size": 9504
+    },
+    "zh/city/sapporo.mp3": {
+      "kind": "city",
+      "key": "sapporo",
+      "size": 8496
+    },
+    "zh/city/seattle.mp3": {
+      "kind": "city",
+      "key": "seattle",
+      "size": 9792
+    },
+    "zh/city/seoul.mp3": {
+      "kind": "city",
+      "key": "seoul",
+      "size": 8496
+    },
+    "zh/city/shanghai.mp3": {
+      "kind": "city",
+      "key": "shanghai",
+      "size": 8784
+    },
+    "zh/city/shenyang.mp3": {
+      "kind": "city",
+      "key": "shenyang",
+      "size": 8352
+    },
+    "zh/city/shenzhen.mp3": {
+      "kind": "city",
+      "key": "shenzhen",
+      "size": 8640
+    },
+    "zh/city/shijiazhuang.mp3": {
+      "kind": "city",
+      "key": "shijiazhuang",
+      "size": 9936
+    },
+    "zh/city/singapore.mp3": {
+      "kind": "city",
+      "key": "singapore",
+      "size": 9792
+    },
+    "zh/city/stockholm.mp3": {
+      "kind": "city",
+      "key": "stockholm",
+      "size": 11664
+    },
+    "zh/city/suzhou.mp3": {
+      "kind": "city",
+      "key": "suzhou",
+      "size": 8640
+    },
+    "zh/city/sydney.mp3": {
+      "kind": "city",
+      "key": "sydney",
+      "size": 8496
+    },
+    "zh/city/taipei.mp3": {
+      "kind": "city",
+      "key": "taipei",
+      "size": 8352
+    },
+    "zh/city/taiyuan.mp3": {
+      "kind": "city",
+      "key": "taiyuan",
+      "size": 8208
+    },
+    "zh/city/tianjin.mp3": {
+      "kind": "city",
+      "key": "tianjin",
+      "size": 8208
+    },
+    "zh/city/tokyo.mp3": {
+      "kind": "city",
+      "key": "tokyo",
+      "size": 7920
+    },
+    "zh/city/toronto.mp3": {
+      "kind": "city",
+      "key": "toronto",
+      "size": 9216
+    },
+    "zh/city/urumqi.mp3": {
+      "kind": "city",
+      "key": "urumqi",
+      "size": 10512
+    },
+    "zh/city/vancouver.mp3": {
+      "kind": "city",
+      "key": "vancouver",
+      "size": 9216
+    },
+    "zh/city/venice.mp3": {
+      "kind": "city",
+      "key": "venice",
+      "size": 9216
+    },
+    "zh/city/vienna.mp3": {
+      "kind": "city",
+      "key": "vienna",
+      "size": 9216
+    },
+    "zh/city/wuhan.mp3": {
+      "kind": "city",
+      "key": "wuhan",
+      "size": 7920
+    },
+    "zh/city/xiamen.mp3": {
+      "kind": "city",
+      "key": "xiamen",
+      "size": 8640
+    },
+    "zh/city/xian.mp3": {
+      "kind": "city",
+      "key": "xian",
+      "size": 8064
+    },
+    "zh/city/xining.mp3": {
+      "kind": "city",
+      "key": "xining",
+      "size": 8640
+    },
+    "zh/city/yinchuan.mp3": {
+      "kind": "city",
+      "key": "yinchuan",
+      "size": 8496
+    },
+    "zh/city/zhengzhou.mp3": {
+      "kind": "city",
+      "key": "zhengzhou",
+      "size": 8064
+    },
+    "zh/city/zhuhai.mp3": {
+      "kind": "city",
+      "key": "zhuhai",
+      "size": 8352
+    },
+    "zh/city/zurich.mp3": {
+      "kind": "city",
+      "key": "zurich",
+      "size": 9936
+    },
+    "zh/temp/t0.mp3": {
+      "kind": "temp",
+      "key": "t0",
+      "size": 8208
+    },
+    "zh/temp/t1.mp3": {
+      "kind": "temp",
+      "key": "t1",
+      "size": 7920
+    },
+    "zh/temp/t10.mp3": {
+      "kind": "temp",
+      "key": "t10",
+      "size": 8496
+    },
+    "zh/temp/t11.mp3": {
+      "kind": "temp",
+      "key": "t11",
+      "size": 9504
+    },
+    "zh/temp/t12.mp3": {
+      "kind": "temp",
+      "key": "t12",
+      "size": 9360
+    },
+    "zh/temp/t13.mp3": {
+      "kind": "temp",
+      "key": "t13",
+      "size": 9792
+    },
+    "zh/temp/t14.mp3": {
+      "kind": "temp",
+      "key": "t14",
+      "size": 9792
+    },
+    "zh/temp/t15.mp3": {
+      "kind": "temp",
+      "key": "t15",
+      "size": 9360
+    },
+    "zh/temp/t16.mp3": {
+      "kind": "temp",
+      "key": "t16",
+      "size": 9648
+    },
+    "zh/temp/t17.mp3": {
+      "kind": "temp",
+      "key": "t17",
+      "size": 9792
+    },
+    "zh/temp/t18.mp3": {
+      "kind": "temp",
+      "key": "t18",
+      "size": 9648
+    },
+    "zh/temp/t19.mp3": {
+      "kind": "temp",
+      "key": "t19",
+      "size": 9648
+    },
+    "zh/temp/t2.mp3": {
+      "kind": "temp",
+      "key": "t2",
+      "size": 8208
+    },
+    "zh/temp/t20.mp3": {
+      "kind": "temp",
+      "key": "t20",
+      "size": 8928
+    },
+    "zh/temp/t21.mp3": {
+      "kind": "temp",
+      "key": "t21",
+      "size": 10080
+    },
+    "zh/temp/t22.mp3": {
+      "kind": "temp",
+      "key": "t22",
+      "size": 10224
+    },
+    "zh/temp/t23.mp3": {
+      "kind": "temp",
+      "key": "t23",
+      "size": 10224
+    },
+    "zh/temp/t24.mp3": {
+      "kind": "temp",
+      "key": "t24",
+      "size": 10368
+    },
+    "zh/temp/t25.mp3": {
+      "kind": "temp",
+      "key": "t25",
+      "size": 10224
+    },
+    "zh/temp/t26.mp3": {
+      "kind": "temp",
+      "key": "t26",
+      "size": 10224
+    },
+    "zh/temp/t27.mp3": {
+      "kind": "temp",
+      "key": "t27",
+      "size": 10512
+    },
+    "zh/temp/t28.mp3": {
+      "kind": "temp",
+      "key": "t28",
+      "size": 10224
+    },
+    "zh/temp/t29.mp3": {
+      "kind": "temp",
+      "key": "t29",
+      "size": 10368
+    },
+    "zh/temp/t3.mp3": {
+      "kind": "temp",
+      "key": "t3",
+      "size": 8496
+    },
+    "zh/temp/t30.mp3": {
+      "kind": "temp",
+      "key": "t30",
+      "size": 9360
+    },
+    "zh/temp/t31.mp3": {
+      "kind": "temp",
+      "key": "t31",
+      "size": 10512
+    },
+    "zh/temp/t32.mp3": {
+      "kind": "temp",
+      "key": "t32",
+      "size": 10512
+    },
+    "zh/temp/t33.mp3": {
+      "kind": "temp",
+      "key": "t33",
+      "size": 10656
+    },
+    "zh/temp/t34.mp3": {
+      "kind": "temp",
+      "key": "t34",
+      "size": 10800
+    },
+    "zh/temp/t35.mp3": {
+      "kind": "temp",
+      "key": "t35",
+      "size": 10512
+    },
+    "zh/temp/t36.mp3": {
+      "kind": "temp",
+      "key": "t36",
+      "size": 10512
+    },
+    "zh/temp/t37.mp3": {
+      "kind": "temp",
+      "key": "t37",
+      "size": 10656
+    },
+    "zh/temp/t38.mp3": {
+      "kind": "temp",
+      "key": "t38",
+      "size": 10512
+    },
+    "zh/temp/t39.mp3": {
+      "kind": "temp",
+      "key": "t39",
+      "size": 10656
+    },
+    "zh/temp/t4.mp3": {
+      "kind": "temp",
+      "key": "t4",
+      "size": 8496
+    },
+    "zh/temp/t40.mp3": {
+      "kind": "temp",
+      "key": "t40",
+      "size": 9360
+    },
+    "zh/temp/t41.mp3": {
+      "kind": "temp",
+      "key": "t41",
+      "size": 10368
+    },
+    "zh/temp/t42.mp3": {
+      "kind": "temp",
+      "key": "t42",
+      "size": 10512
+    },
+    "zh/temp/t5.mp3": {
+      "kind": "temp",
+      "key": "t5",
+      "size": 7920
+    },
+    "zh/temp/t6.mp3": {
+      "kind": "temp",
+      "key": "t6",
+      "size": 8208
+    },
+    "zh/temp/t7.mp3": {
+      "kind": "temp",
+      "key": "t7",
+      "size": 8208
+    },
+    "zh/temp/t8.mp3": {
+      "kind": "temp",
+      "key": "t8",
+      "size": 8064
+    },
+    "zh/temp/t9.mp3": {
+      "kind": "temp",
+      "key": "t9",
+      "size": 8064
+    },
+    "zh/weather/daxue.mp3": {
+      "kind": "weather",
+      "key": "daxue",
+      "size": 8496
+    },
+    "zh/weather/dayu.mp3": {
+      "kind": "weather",
+      "key": "dayu",
+      "size": 8208
+    },
+    "zh/weather/duoyun.mp3": {
+      "kind": "weather",
+      "key": "duoyun",
+      "size": 8208
+    },
+    "zh/weather/leizhenyu.mp3": {
+      "kind": "weather",
+      "key": "leizhenyu",
+      "size": 9504
+    },
+    "zh/weather/qing.mp3": {
+      "kind": "weather",
+      "key": "qing",
+      "size": 7056
+    },
+    "zh/weather/xiaoxue.mp3": {
+      "kind": "weather",
+      "key": "xiaoxue",
+      "size": 8640
+    },
+    "zh/weather/xiaoyu.mp3": {
+      "kind": "weather",
+      "key": "xiaoyu",
+      "size": 8496
+    },
+    "zh/weather/yin.mp3": {
+      "kind": "weather",
+      "key": "yin",
+      "size": 6768
+    },
+    "zh/weather/youwu.mp3": {
+      "kind": "weather",
+      "key": "youwu",
+      "size": 7920
+    },
+    "zh/weather/yujiaxue.mp3": {
+      "kind": "weather",
+      "key": "yujiaxue",
+      "size": 9792
+    },
+    "zh/weather/zhenxue.mp3": {
+      "kind": "weather",
+      "key": "zhenxue",
+      "size": 8640
+    },
+    "zh/weather/zhenyu.mp3": {
+      "kind": "weather",
+      "key": "zhenyu",
+      "size": 8064
+    },
+    "zh/weather/zhongxue.mp3": {
+      "kind": "weather",
+      "key": "zhongxue",
+      "size": 8496
+    },
+    "zh/weather/zhongyu.mp3": {
+      "kind": "weather",
+      "key": "zhongyu",
+      "size": 8064
+    },
+    "zh/word/dao.mp3": {
+      "kind": "word",
+      "key": "dao",
+      "size": 6768
+    },
+    "zh/word/du.mp3": {
+      "kind": "word",
+      "key": "du",
+      "size": 6768
+    },
+    "zh/word/sheshidu.mp3": {
+      "kind": "word",
+      "key": "sheshidu",
+      "size": 9504
+    }
+  }
+}
