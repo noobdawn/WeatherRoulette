@@ -47,35 +47,29 @@ function everyClipSegments(audioManifest) {
 
 /**
  * 预下载语音包，并把进度画到毛玻璃加载界面上。
- * 设定等待上限：网络很慢时不能让用户一直卡在加载页，
- * 到点就放行开播（未下完的片段，播放时按需加载仍能补救）。
+ *
+ * 刻意**不设等待上限**：语音包完整就绪是体验的前提（老板要求「该等多久等多久」），
+ * 提前放行只会让用户在第一句播报时再等一次，反而更差。
+ * 唯一的例外是片段彻底下载失败（重试后仍失败）——那属于错误而非"慢"，
+ * 不能让用户无限期等下去，此时记一笔告警后正常开播。
  */
-async function runPreload(preloader, loading, segments, { maxMs = 20000 } = {}) {
+async function runPreload(preloader, loading, segments) {
   const startedAt = Date.now();
-  let elapsed = 0;
-  const result = await Promise.race([
-    preloader.load(segments, {
-      onProgress: (p) => {
-        elapsed = Date.now() - startedAt;
-        loading.setProgress({ done: p.done, total: p.total, bytes: p.bytes });
-        // 进度太慢就提示一下，免得用户以为卡死了
-        if (elapsed > 6000 && p.ratio < 0.6) {
-          loading.setHint('网络较慢，还在下载语音包…也可以直接开始');
-        }
-      },
-    }),
-    new Promise((resolve) => {
-      setTimeout(() => {
-        preloader.abort();
-        resolve({
-          total: preloader.total, done: preloader.done, failed: -1,
-          bytes: preloader.loadedBytes, ms: Date.now() - startedAt, timedOut: true,
-        });
-      }, maxMs);
-    }),
-  ]);
+  const result = await preloader.load(segments, {
+    onProgress: (p) => {
+      loading.setProgress({ done: p.done, total: p.total, bytes: p.bytes });
+    },
+    onStall: () => {
+      // 只是提示，绝不中断下载：网慢也照样等下去
+      loading.setHint('网络有点慢，仍在下载语音包，请稍候…');
+    },
+  });
+  const ms = Date.now() - startedAt;
+  if (result.failed > 0) {
+    console.warn(`[WeatherRoulette] 有 ${result.failed} 个语音片段重试后仍下载失败，仍继续开播`);
+  }
   loading.setProgress({ done: result.total, total: result.total, bytes: result.bytes });
-  return result;
+  return { ...result, ms };
 }
 
 /**

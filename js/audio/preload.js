@@ -11,8 +11,12 @@ import { audioUrlFor } from './manifest.js';
 
 /** 并发上限：太高会拖慢单个请求，太低又浪费时间 */
 const CONCURRENCY = 12;
-/** 单个片段下载超时（毫秒）：超时不算失败，只是这次没预热成功 */
+/** 单个片段下载超时（毫秒）：超时算这次失败，交给下面的重试 */
 const TIMEOUT = 20000;
+/** 单个片段最多尝试几次（含首次）。不设整体上限，但偶发的网络抖动要靠重试兜住 */
+const MAX_ATTEMPTS = 3;
+/** 进度停滞多久后提示用户（毫秒）：只是提示，不会中断下载 */
+const STALL_HINT_MS = 10000;
 
 export class AudioPreloader {
   constructor() {
@@ -33,12 +37,12 @@ export class AudioPreloader {
   }
 
   /**
-   * 下载全部语音片段。
+   * 下载全部语音片段。会一直等到下完（或每个片段都重试用尽），不设整体时限。
    * @param {Array<{kind:string,key:string}>} segments 任意卡片的片段（会去重）
-   * @param {{onProgress?:Function, signal?:AbortSignal}} opts
+   * @param {{onProgress?:Function, onStall?:Function, signal?:AbortSignal}} opts
    * @returns {Promise<{total:number, done:number, failed:number, bytes:number, ms:number}>}
    */
-  async load(segments, { onProgress, signal } = {}) {
+  async load(segments, { onProgress, onStall, signal } = {}) {
     const urls = [...new Set(segments.map((s) => audioUrlFor(s)))];
     this.total = urls.length;
     this.startedAt = Date.now();
@@ -47,13 +51,23 @@ export class AudioPreloader {
       return { total: 0, done: 0, failed: 0, bytes: 0, ms: 0 };
     }
 
+    // 进度停滞检测：只提示，不打断下载
+    let lastChange = Date.now();
+    const stallTimer = setInterval(() => {
+      if (Date.now() - lastChange >= STALL_HINT_MS) {
+        onStall?.({ stalledMs: Date.now() - lastChange, done: this.done, total: this.total });
+        lastChange = Date.now(); // 避免反复触发同一个提示
+      }
+    }, 1000);
+
     let cursor = 0;
     const worker = async () => {
       while (!this.aborted && !signal?.aborted) {
         const i = cursor++;
         if (i >= urls.length) return;
-        await this.#one(urls[i], signal);
+        await this.#oneWithRetry(urls[i], signal);
         this.done++;
+        lastChange = Date.now();
         onProgress?.({
           done: this.done,
           total: this.total,
@@ -67,6 +81,7 @@ export class AudioPreloader {
     await Promise.all(
       Array.from({ length: Math.min(CONCURRENCY, urls.length) }, () => worker()),
     );
+    clearInterval(stallTimer);
 
     return {
       total: this.total,
@@ -81,6 +96,23 @@ export class AudioPreloader {
     this.aborted = true;
   }
 
+  async #oneWithRetry(url, signal) {
+    let lastErr = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      if (this.aborted || signal?.aborted) return false;
+      const ok = await this.#one(url, signal);
+      if (ok) return true;
+      lastErr = this.lastError;
+      if (attempt < MAX_ATTEMPTS) {
+        // 退避一下再试：网络抖动往往下一次就成
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+    this.failed.push({ url, reason: String(lastErr?.message ?? lastErr) });
+    return false;
+  }
+
+  /** 下载单个片段。返回是否成功；失败原因记在 this.lastError 里供重试逻辑取用。 */
   async #one(url, signal) {
     const controller = new AbortController();
     const onAbort = () => controller.abort();
@@ -93,9 +125,12 @@ export class AudioPreloader {
       // 必须把 body 读完才会真正进入缓存
       const buf = await res.arrayBuffer();
       this.loadedBytes += buf.byteLength;
+      this.lastError = null;
+      return true;
     } catch (err) {
-      // 单个片段失败不影响整体：播放时按需加载还能补救
-      this.failed.push({ url, reason: String(err?.message ?? err) });
+      // 单个片段失败不在这里定论：交给 #oneWithRetry 决定是否重试
+      this.lastError = err;
+      return false;
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
