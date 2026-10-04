@@ -329,10 +329,12 @@ const P = isLarge
       app: 'app', bgA: 'bg-img-a', bgB: 'bg-img-b',
     };
 
-const ids = [
-  P.cityZh, P.cityEn, P.tempC, P.day, P.weatherZh, P.weatherEn, P.status,
-  P.startBtn, P.musicBtn, P.icon, P.app, P.bgA, P.bgB, P.overlay, P.hint,
-].filter(Boolean);
+// 极简版的必需节点：没有 #start-overlay / #btn-start（进去就自动播报）
+const ids = isLarge
+  ? [P.cityZh, P.cityEn, P.tempC, P.day, P.weatherZh, P.weatherEn, P.status,
+     P.startBtn, P.musicBtn, P.icon, P.app, P.bgA, P.bgB, P.overlay, P.hint].filter(Boolean)
+  : [P.cityZh, P.cityEn, P.tempC, P.weatherZh, P.weatherEn, P.status,
+     P.musicBtn, P.icon, P.app, P.bgA, P.bgB].filter(Boolean);
 
 console.log('[1] 首屏渲染（等 JS 装配完成）');
 try {
@@ -374,7 +376,8 @@ check('天气文案中英成对', snapshot.weatherZh.length > 0 && /[A-Za-z]/.te
   `${snapshot.weatherZh} / ${snapshot.weatherEn}`);
 check(`必需节点齐全（${ids.length} 个）`, snapshot.missingIds.length === 0,
   snapshot.missingIds.join(', '));
-check('开始遮罩存在（音频解锁必需）', snapshot.hasStartOverlay);
+check('开始遮罩存在（音频解锁必需）', isLarge ? snapshot.hasStartOverlay : true,
+  isLarge ? '' : '极简版不需要：进去就自动播报');
 if (!isLarge) {
   check('已移除：进度条/播放控制/华氏度/当地时间/风速',
     snapshot.removed.length === 0, snapshot.removed.join(', ') || '全部已移除');
@@ -459,37 +462,54 @@ check('页面无横向溢出', typography.scrollW <= typography.viewport.w + 2,
 
 console.log('\n[3] 交互与播报链路');
 if (CLICK_START) {
-  // 关键：必须等 boot() 真正跑完再点。boot 在第一次 renderCard 之后还要预加载音频；
-  // 若在「城市名渲染出来」就点，按钮监听还没挂上，点击会被静默丢掉。
-  // 「开始提示被填充」是 boot 走到最后一段的标志。
-  let bootDone = false;
-  try {
-    await session.waitFor(
-      `(document.getElementById(${JSON.stringify(P.hint)})?.textContent ?? '').trim().length > 0`,
-      { timeoutMs: 90000, label: 'boot 完成（开始提示被填充）' },
+  // 这版是「进去就自动播报」：index.html 里根本没有 #start-overlay / #btn-start。
+  // 只有浏览器拦截自动播放时，main.js 才会动态生成一个同 id 的兜底解锁遮罩。
+  // 所以这里等的是「播报自己跑起来」，而不是等按钮出现。
+  const isMinimal = !isLarge;
+  if (isMinimal) {
+    let autoStarted = false;
+    try {
+      await session.waitFor(
+        `(() => {
+           const st = window.__wr?.state;
+           return Boolean(st && (st.playing || st.paused));
+         })()`,
+        { timeoutMs: 90000, label: '自动播报已自行启动（没有任何用户点击）' },
+      );
+      autoStarted = true;
+    } catch (err) {
+      console.log(`      ⚠ ${err.message}`);
+    }
+    const st = await session.eval(`window.__wr?.state ?? null`);
+    check('无需任何点击自动开始播报', autoStarted,
+      st ? `state=${JSON.stringify(st)}` : '拿不到播放状态');
+    check('页面里没有「开始播报」遮罩（除非自动播放被拦截）',
+      !(await session.eval(`!!document.getElementById('start-overlay')`)),
+      '正常情况下应为 false');
+    const status = await session.eval(
+      `document.getElementById(${JSON.stringify(P.status)})?.textContent.trim() ?? ''`,
     );
-    bootDone = true;
-  } catch (err) {
-    console.log(`      ⚠ ${err.message}`);
+    console.log(`      隐藏状态位：${status}`);
+  } else {
+    // 大屏版仍有显式按钮
+    let bootDone = false;
+    try {
+      await session.waitFor(
+        `(document.getElementById(${JSON.stringify(P.hint)})?.textContent ?? '').trim().length > 0`,
+        { timeoutMs: 90000, label: 'boot 完成' },
+      );
+      bootDone = true;
+    } catch (err) {
+      console.log(`      ⚠ ${err.message}`);
+    }
+    check('大屏版 boot 完成（开始提示已填充）', bootDone);
+    const clicked = await session.eval(
+      `(() => { const b = document.getElementById(${JSON.stringify(P.startBtn)});
+                if (!b) return false; b.click(); return true; })()`,
+    );
+    check('已点击「开始播报」', clicked);
+    await sleep(1800);
   }
-  const preClick = await session.eval(`({
-    hint: document.getElementById(${JSON.stringify(P.hint)})?.textContent.trim() ?? '',
-    overlayClass: document.getElementById(${JSON.stringify(P.overlay)})?.className ?? '',
-    status: document.getElementById(${JSON.stringify(P.status)})?.textContent.trim() ?? '',
-  })`);
-  check('boot 已完成（开始提示已填充，按钮监听已挂）', bootDone,
-    `提示="${preClick.hint.slice(0, 46)}"，状态="${preClick.status}"`);
-
-  const clicked = await session.eval(
-    `(() => { const b = document.getElementById(${JSON.stringify(P.startBtn)});
-              if (!b) return false; b.click(); return true; })()`,
-  );
-  check('已点击「开始播报」', clicked);
-  await sleep(1800);
-  const overlayNow = await session.eval(
-    `document.getElementById(${JSON.stringify(P.overlay)})?.className ?? ''`,
-  );
-  console.log(`      点击后遮罩 class：${overlayNow}`);
 
   const audioState = await session.eval(`(async () => {
     // new Audio() 的元素不在 DOM 里，必须靠页面里埋的探针统计
@@ -501,15 +521,15 @@ if (CLICK_START) {
       errors: stats.playErrors.slice(0, 6),
       srcs: stats.srcs.slice(0, 8),
       logs: (window.__wrLogs ?? []).slice(-8),
-      overlayHidden: (() => {
-        const o = document.getElementById(${JSON.stringify(P.overlay)});
-        if (!o) return null;
+      overlayGone: (() => {
+        const o = document.getElementById(${JSON.stringify(P.overlay ?? 'start-overlay')});
+        if (!o) return true; // 极简版正常路径下根本没有这个节点
         const cs = getComputedStyle(o);
         return o.hasAttribute('hidden') || cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.05;
       })(),
     };
   })()`);
-  check('开始遮罩已隐藏', audioState.overlayHidden !== false, String(audioState.overlayHidden));
+  check('没有残留在页面上的解锁遮罩', audioState.overlayGone !== false, String(audioState.overlayGone));
   check('音频元素已创建（播报链路已启动）', audioState.created > 0, `${audioState.created} 个`);
   check('音频片段真的开始播放', audioState.plays > 0, `play 事件 ${audioState.plays} 次`);
   check('没有播放失败', audioState.errors.length === 0, audioState.errors.join(' | ') || '无');
@@ -554,16 +574,29 @@ if (CLICK_START) {
     check('语音片段真的在播放（不只是背景音乐）', voiceClips.length >= 3,
       `语音片段 ${voiceClips.length} 个：${voiceClips.slice(0, 10).map((x) => x.src).join(' ')}`);
     if (voiceClips.length >= 3) {
-      // 顺序校验：一句播报应为 城市 → 天气 → 温度 → 到 → 温度 → 度
+      // 顺序校验：一句播报应为 城市 → 天气 → 纯数字 → 到 → 数字+度
       const order = voiceClips.slice(0, 6).map((x) => x.src.replace('.mp3', ''));
       console.log(`      首句片段顺序：${order.join(' → ')}`);
-      const hasTemp = voiceClips.some((x) => /^t\d+\.mp3$/.test(x.src));
+      const nums = voiceClips.filter((x) => /^n\d+\.mp3$/.test(x.src));
+      const temps = voiceClips.filter((x) => /^t\d+\.mp3$/.test(x.src));
       const hasDao = voiceClips.some((x) => x.src === 'dao.mp3');
-      const hasDu = voiceClips.some((x) => x.src === 'du.mp3');
-      check('温度片段已播放（temp bug 已修好的实证）', hasTemp,
-        voiceClips.filter((x) => /^t\d+\.mp3$/.test(x.src)).map((x) => x.src).slice(0, 4).join(' '));
-      check('连接词「到」「度」都已播放', hasDao && hasDu,
-        `dao=${hasDao} du=${hasDu}`);
+      check('温度区间前半段用「纯数字」片段、后半段用「数字+度」',
+        nums.length > 0 && temps.length > 0,
+        `纯数字 ${nums.map((x) => x.src).slice(0, 3).join(' ')} / 数字+度 ${temps.map((x) => x.src).slice(0, 3).join(' ')}`);
+      check('连接词「到」已播放', hasDao);
+      check('不再单独播放「度」片段（度已并入 t{N}）',
+        !voiceClips.some((x) => x.src === 'du.mp3'), 'du.mp3 已从语音包移除');
+      // 段间停顿应该很短，否则听起来一顿一顿
+      const gaps = [];
+      for (let i = 1; i < voiceClips.length; i++) {
+        const d = voiceClips[i].t - voiceClips[i - 1].t;
+        if (d < 3000) gaps.push(d);
+      }
+      if (gaps.length >= 2) {
+        const avg = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+        console.log(`      段间平均间隔：${avg}ms（最长 ${Math.max(...gaps)}ms）`);
+        check('句内停顿连贯（平均 < 1200ms）', avg < 1200, `${avg}ms`);
+      }
     }
   }
 

@@ -17,13 +17,22 @@ export function wordAudioPath(key) {
 }
 
 /**
- * assets/audio/zh/temp/t18.mp3
+ * assets/audio/zh/temp/t18.mp3（十八度，自带「度」）
  * 入参可以是 18、'18' 或片段键 't18' —— 两种写法都容错，
  * 避免调用方多带一层 t 前缀时解析出不存在的 tt18.mp3。
  */
 export function tempAudioPath(n) {
   const num = String(n).replace(/^t/, '');
   return `${AUDIO_DIR}/zh/temp/t${num}.mp3`;
+}
+
+/**
+ * assets/audio/zh/num/n18.mp3（只读「十八」，不带「度」）
+ * 用于「十八到二十四度」这样的温度区间：前半段的数字后面不能带「度」。
+ */
+export function numAudioPath(n) {
+  const num = String(n).replace(/^n/, '');
+  return `${AUDIO_DIR}/zh/num/n${num}.mp3`;
 }
 
 /** assets/audio/music/yuzhouchangwan.mp3（也可放自备的 music.mp3 覆盖） */

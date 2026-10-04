@@ -40,9 +40,14 @@ DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
 
 CONNECTORS = {
     "dao": "到",
-    "du": "度",
+    # 注：「度」不再单独成段 —— 播报「五到十五度」时「度」由后半段的 t{N} 自带，
+    # 单独生成一个「度」片段反而会在拼接时留下多余停顿。
     "sheshidu": "摄氏度",
 }
+
+# 数字单独成段（不带「度」）：播报「五到十五度」时，前半段的数字后面不能带「度」，
+# 否则会读成「五度到十五度」。真正需要「度」的只有后半段（t{N} 自带「度」）。
+NUMBER_ONLY = True
 
 
 def num_to_zh(n: int) -> str:
@@ -94,6 +99,9 @@ def build_jobs(only: set[str] | None) -> list[dict]:
     for n in range(TEMP_MIN, TEMP_MAX + 1):
         add("temp", f"t{n}", f"{num_to_zh(n)}度", AUDIO_ROOT / "zh" / "temp" / f"t{n}.mp3",
             f"{n}°C")
+        if NUMBER_ONLY:
+            add("num", f"n{n}", f"{num_to_zh(n)}", AUDIO_ROOT / "zh" / "num" / f"n{n}.mp3",
+                f"{n}（不带度）")
 
     for key, text in CONNECTORS.items():
         add("word", key, text, AUDIO_ROOT / "zh" / "word" / f"{key}.mp3", text)
@@ -182,6 +190,7 @@ def write_manifest() -> None:
             "city": sum(1 for f in files.values() if f["kind"] == "city"),
             "weather": sum(1 for f in files.values() if f["kind"] == "weather"),
             "temp": sum(1 for f in files.values() if f["kind"] == "temp"),
+            "num": sum(1 for f in files.values() if f["kind"] == "num"),
             "word": sum(1 for f in files.values() if f["kind"] == "word"),
         },
         "tempRange": [TEMP_MIN, TEMP_MAX],
@@ -207,6 +216,8 @@ def verify() -> int:
     keys |= {k for k in wmo["fallback"]["audio"]}
     expected += [AUDIO_ROOT / "zh" / "weather" / f"{k}.mp3" for k in sorted(keys)]
     expected += [AUDIO_ROOT / "zh" / "temp" / f"t{n}.mp3" for n in range(TEMP_MIN, TEMP_MAX + 1)]
+    if NUMBER_ONLY:
+        expected += [AUDIO_ROOT / "zh" / "num" / f"n{n}.mp3" for n in range(TEMP_MIN, TEMP_MAX + 1)]
     expected += [AUDIO_ROOT / "zh" / "word" / f"{k}.mp3" for k in CONNECTORS]
 
     missing = [p for p in expected if not p.exists()]

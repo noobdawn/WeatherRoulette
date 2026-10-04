@@ -9,6 +9,9 @@ Thumbs.db
 assets/audio/music/*.wav
 assets/audio/music/preview-*
 
+# tools/trim-audio.py 裁剪前的原始片段备份（体积约 1.6MB，只用于回滚，不必入库）
+assets/audio/.orig/
+
 # 测试临时产物
 tools/last-dom.html
 tools/shots/

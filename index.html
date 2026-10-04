@@ -51,16 +51,9 @@
     <!-- 音乐开关：右上角纯图标，默认很淡（opacity .35），hover/focus/tap 才到 1 -->
     <button id="btn-music" type="button" aria-label="背景音乐开关" aria-pressed="true">🎵</button>
 
-    <!-- 音频解锁遮罩：浏览器禁止自动播放，必须由用户点一下「开始播报」。
-         隐藏方式（CSS 都支持）：加 .is-hidden / .is-gone 类，或 #app 加 .is-started，或加 hidden 属性。 -->
-    <div id="start-overlay">
-      <div class="start-panel">
-        <div class="start-title">天气播报</div>
-        <div class="start-sub">Weather Roulette</div>
-        <button id="btn-start" type="button">▶ 开始播报</button>
-        <p id="start-hint"></p>
-      </div>
-    </div>
+    <!-- 这里没有「开始播报」遮罩：页面加载后自动开始播报。
+         只有浏览器拦截自动播放时，main.js 才会动态创建一个同 id（#start-overlay）的
+         一次性解锁遮罩，样式复用 style.css 里现成的 #start-overlay 规则。 -->
 
     <!-- 隐藏状态位：给屏幕阅读器与自动化测试用，视觉上永远不可见 -->
     <div id="sr-only-status" role="status" aria-live="polite" hidden></div>

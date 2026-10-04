@@ -50,14 +50,15 @@ export function describeCard(card) {
   const zhText = `${card.city.zh} ${w.zh} ${numToZh(min)}到${numToZh(max)}度`;
   const enText = `${card.city.en} · ${w.en} · ${toF(min)}–${toF(max)}°F`;
 
-  // 音频拼接脚本：每项是 assets/audio/zh 下的相对路径，按顺序播放
+  // 音频拼接脚本：每项是 assets/audio/zh 下的相对路径，按顺序播放。
+  // 注意温度区间的读法：前半段用「纯数字」（五），后半段用「数字+度」（十五度），
+  // 拼出来才是「五到十五度」；前半段若用 t{N} 会读成「五度到十五度」。
   const segments = [
     { kind: 'city', key: card.city.id },
     ...w.audio.map((key) => ({ kind: 'weather', key })),
-    { kind: 'temp', key: `t${min}` },
+    { kind: 'num', key: `n${min}` },
     { kind: 'word', key: 'dao' },
     { kind: 'temp', key: `t${max}` },
-    { kind: 'word', key: 'du' },
   ];
 
   return {

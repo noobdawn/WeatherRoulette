@@ -5,7 +5,7 @@ import { AUDIO, WEATHER_TTL } from './core/constants.js';
 import { describeCard, dayLabel, dayLabelEn } from './core/format.js';
 import { loadWeather, dailyToDays } from './core/weather.js';
 import { pickCities, buildCards, uniqueCities } from './core/cards.js';
-import { shuffled, sleep } from './core/utils.js';
+import { shuffled } from './core/utils.js';
 import { loadAudioManifest, audioUrlFor, manifestHas } from './audio/manifest.js';
 import { ClipLoader } from './audio/loader.js';
 import { MusicPlayer } from './audio/music.js';
@@ -15,15 +15,139 @@ import { loadImageManifest, resolveCityImage } from './ui/assets.js';
 
 const $ = (sel) => document.querySelector(sel);
 
-// 极简版：只有「开始播报」遮罩与右上角音乐开关是可见控件，
-// 播放控制/进度条/元信息已全部移除（老板要求：就一张背景+前景，自动轮播）。
-// 所有引用一律可选，缺节点不能让页面崩掉。
+// 极简版：界面上唯一的控件是右上角的音乐开关（老板要求：进去就自动播报，不要「开始播报」界面）。
+// index.html 里已经完全没有 #start-overlay；只有在浏览器拦截自动播放时，
+// 才会由 ensureAutoplay() 动态创建一个同 id 的兜底遮罩（样式复用 style.css 里现成的规则）。
 const ui = {
-  start: $('#btn-start'),
-  overlay: $('#start-overlay'),
-  hint: $('#start-hint'),
   music: $('#btn-music'),
 };
+
+/** 移除「点击解锁」兜底遮罩（正常自动播放时页面上根本没有它） */
+function dropUnlockOverlay() {
+  const box = document.getElementById('start-overlay');
+  if (!box) return;
+  box.classList.add('is-hidden');
+  setTimeout(() => box.remove(), 450);
+}
+
+/**
+ * 自动播放。
+ * 浏览器（尤其移动端 Safafi/Chrome）在没有用户手势时会拦截有声音的播放，
+ * 所以这里先直接试一次：成功就什么都不显示、直接开始播报；
+ * 只有被拦截时才生成一个极简遮罩请用户点一下——这是浏览器策略决定的，无法用代码绕过。
+ */
+function ensureAutoplay(music, onReady) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const succeed = () => {
+      if (settled) return;
+      settled = true;
+      dropUnlockOverlay();
+      document.body.classList.add('is-started');
+      console.info('[WeatherRoulette] 自动播放已解锁，直接开始播报');
+      onReady();
+      resolve(true);
+    };
+    const showUnlock = () => {
+      if (settled) return;
+      settled = true;
+      console.warn('[WeatherRoulette] 浏览器拦截了自动播放，显示一次性解锁按钮');
+      const box = showUnlockOverlay(() => {
+        document.body.classList.add('is-started');
+        onReady();
+        resolve(true);
+      });
+      void box;
+    };
+
+    // 先试着真的播一下（这同时会把音乐解锁）。
+    // 注意：music.fadeIn() 被浏览器拦截时**不会 reject**，而是 resolve(false)，
+    // 所以必须看返回值 + 复查 audio.paused，否则会误判成"自动播放成功"，
+    // 结果既不显示解锁按钮、也没有声音（真实浏览器上就是这个表现）。
+    let attempt;
+    try {
+      attempt = music?.fadeIn?.();
+    } catch {
+      attempt = null;
+    }
+    Promise.resolve(attempt).then(
+      (ok) => {
+        const audio = music?.audio;
+        const actuallyPlaying = !audio || audio.paused === false;
+        if (ok !== false && actuallyPlaying) succeed();
+        else showUnlock();
+      },
+      showUnlock,
+    );
+
+    // 更靠得住的一道：用静音缓冲区探一下浏览器准不准我们出声（不产生任何可听声音）
+    probeSilentAudio().then((allowed) => { if (allowed) succeed(); else showUnlock(); });
+    // 兜底：探针和音乐都没结论时，就当被拦截处理
+    setTimeout(() => { if (!settled) showUnlock(); }, 2500);
+  });
+}
+
+/**
+ * 静音探针：用 Web Audio 播一个全零缓冲区。
+ * 万一它没被挂起，说明浏览器允许我们自动出声；若被挂起，也顺手 resume 一下
+ * （对已经与本站有过交互的用户往往就解锁了）。全程不产生任何可听声音。
+ */
+async function probeSilentAudio() {
+  const Ctx = globalThis.AudioContext || globalThis.webkitAudioContext;
+  if (!Ctx) return false;
+  try {
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') await ctx.resume();
+    const buf = ctx.createBuffer(1, 1, ctx.sampleRate || 44100);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+    const ok = ctx.state === 'running';
+    setTimeout(() => { try { ctx.close(); } catch { /* 忽略 */ } }, 100);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 动态生成「点一下开始」兜底遮罩，复用 style.css 里 #start-overlay 的样式 */
+function showUnlockOverlay(onClick) {
+  if (document.getElementById('start-overlay')) return document.getElementById('start-overlay');
+  const doc = document;
+  const box = doc.createElement('div');
+  box.id = 'start-overlay';
+  const panel = doc.createElement('div');
+  panel.className = 'start-panel';
+  const title = doc.createElement('div');
+  title.className = 'start-title';
+  title.textContent = '天气播报';
+  const btn = doc.createElement('button');
+  btn.id = 'btn-start';
+  btn.type = 'button';
+  btn.textContent = '▶ 点一下开始';
+  const hint = doc.createElement('p');
+  hint.id = 'start-hint';
+  hint.textContent = '浏览器需要你点一下才允许播放声音';
+  panel.append(title, btn, hint);
+  box.append(panel);
+  const app = document.getElementById('app') || doc.body;
+  app.append(box);
+
+  const fire = () => {
+    box.classList.add('is-hidden');
+    setTimeout(() => box.remove(), 450);
+    document.removeEventListener('keydown', onKey);
+    onClick();
+  };
+  const onKey = (e) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); fire(); }
+  };
+  btn.addEventListener('click', fire, { once: true });
+  box.addEventListener('click', fire, { once: true });
+  document.addEventListener('keydown', onKey);
+  return box;
+}
 
 async function boot() {
   await domReady();
@@ -120,12 +244,12 @@ async function boot() {
     loader.preloadAll(preloads);
   }
 
-  // 5. 更新「开始」提示，让孩子家长知道要点一下才有声音
-  if (ui.hint) {
+  // 5. 状态写进隐藏状态位（界面上不显示任何提示文案：进去就该直接播报）
+  {
     const voices = audioManifest.counts
       ? `${audioManifest.counts.city} 个城市、${audioManifest.counts.weather} 种天气`
       : `${cities.length} 个城市`;
-    ui.hint.textContent = `共 ${voices}，女声播报 + 《渔舟唱晚》背景音乐。点击开始后有声音。`;
+    screen.setStatus(`共 ${voices}，准备自动播报`);
   }
 
   // 6. 交互：极简版只保留两个 —— 右上角音乐开关、点画面暂停/继续
@@ -181,29 +305,28 @@ async function boot() {
     else if (e.key === 'm' || e.key === 'M') ui.music?.click();
   });
 
-  // 7. 用户点击开始（浏览器要求用户手势才允许播放声音）
-  ui.start?.addEventListener(
-    'click',
-    async () => {
-      ui.overlay?.classList.add('is-hidden');
-      await sleep(120);
-      ui.overlay?.setAttribute('hidden', '');
-      // Service Worker 已经在 boot() 开头注册过，这里只等它就绪并补缓存音乐与壁纸
-      swReady.then((reg) => {
-        const worker = reg?.active || navigator.serviceWorker?.controller;
-        worker?.postMessage({ type: 'cache-music', url: new URL(musicUrl, location.href).href });
-        const urls = currentCards
-          .map((c) => resolveCityImage(c.city, imageManifest)[0]?.url)
-          .filter(Boolean)
-          .slice(0, 8);
-        worker?.postMessage({ type: 'cache-images', urls });
-      });
-      if (!musicOn) music.pause();
-      document.body.classList.add('is-playing');
-      await broadcaster.start();
-    },
-    { once: true },
-  );
+  // 7. 开始播报：默认自动开始，不需要用户点任何东西。
+  //    只有浏览器拦截自动播放时，才会弹出一次性的极简解锁按钮。
+  let broadcastStarted = false;
+  const beginBroadcast = async () => {
+    if (broadcastStarted) return;
+    broadcastStarted = true;
+    // Service Worker 已经在 boot() 开头注册过，这里只等它就绪并补缓存音乐与壁纸
+    swReady.then((reg) => {
+      const worker = reg?.active || navigator.serviceWorker?.controller;
+      worker?.postMessage({ type: 'cache-music', url: new URL(musicUrl, location.href).href });
+      const urls = currentCards
+        .map((c) => resolveCityImage(c.city, imageManifest)[0]?.url)
+        .filter(Boolean)
+        .slice(0, 8);
+      worker?.postMessage({ type: 'cache-images', urls });
+    });
+    if (!musicOn) music.pause();
+    document.body.classList.add('is-playing');
+    await broadcaster.start();
+  };
+  window.__wr.begin = beginBroadcast;
+  await ensureAutoplay(music, beginBroadcast);
 
   // 每 30 分钟自动刷新一次天气数据
   setInterval(() => {
@@ -252,7 +375,8 @@ async function pickMusicUrl(audioManifest) {
 }
 
 function totalAudioSizeMB(audioManifest) {
-  const files = Object.values(audioManifest.files ?? {});
+  // 只统计语音片段：音乐是单独流式加载的，算进来会把「语音包」这个数字虚报好几倍
+  const files = Object.values(audioManifest.files ?? {}).filter((f) => f?.kind !== 'music');
   const bytes = files.reduce((sum, f) => sum + (f.size ?? 0), 0);
   return bytes / 1024 / 1024;
 }

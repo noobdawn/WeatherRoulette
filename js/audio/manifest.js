@@ -1,6 +1,8 @@
 // 读取 assets/audio/manifest.json（由 tools/gen-audio.py 生成），校验片段是否齐全。
 import { AUDIO } from '../core/constants.js';
-import { cityAudioPath, weatherAudioPath, wordAudioPath, tempAudioPath } from '../core/paths.js';
+import {
+  cityAudioPath, weatherAudioPath, wordAudioPath, tempAudioPath, numAudioPath,
+} from '../core/paths.js';
 
 let cached = null;
 
@@ -23,6 +25,8 @@ export function audioUrlFor(seg) {
       return wordAudioPath(seg.key);
     case 'temp':
       return tempAudioPath(seg.key);
+    case 'num':
+      return numAudioPath(seg.key);
     default:
       throw new Error(`未知音频片段类型：${seg.kind}`);
   }

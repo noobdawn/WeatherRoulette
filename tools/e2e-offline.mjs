@@ -307,10 +307,18 @@ check('离线时核心资源仍可取回', Object.values(offlineAssets).every(Bo
 // 注意：不用 window.__wrAudio 判定 —— 那依赖 addScriptToEvaluateOnNewDocument 的探针，
 // 在某些无头时序下不一定装上；「城市自动推进」是端到端行为，更可信。
 const offlineBefore = await evaluate(`document.getElementById('city-zh')?.textContent.trim() ?? ''`);
+// 断网状态下也应该自动开始播报：极简版没有「开始播报」按钮了。
+// 若浏览器拦截自动播放，main.js 会动态生成 #start-overlay，这里两种情况都兼容。
 const offlineStart = await evaluate(
-  `(() => { const b = document.getElementById('btn-start'); if (!b) return false; b.click(); return true; })()`,
+  `(() => {
+     const st = window.__wr?.state;
+     if (st && (st.playing || st.paused)) return 'auto';
+     const b = document.getElementById('btn-start');
+     if (b) { b.click(); return 'clicked'; }
+     return 'none';
+   })()`,
 );
-check('离线时「开始播报」按钮仍可点击', offlineStart === true);
+check('离线时播报链路可启动（自动或一次性解锁）', offlineStart !== 'none', `方式：${offlineStart}`);
 
 let offlineAdvanced = false;
 for (let i = 0; i < 60; i++) {

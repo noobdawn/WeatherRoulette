@@ -19,12 +19,17 @@ export const AUDIO = {
   rate: '-8%',
   /** 句内停顿（毫秒）：城市名 → 天气 */
   gapCityToWeather: 120,
-  /** 句内停顿（毫秒）：天气 → 温度 */
-  gapWeatherToTemp: 160,
+  /** 句内停顿（毫秒）：天气 → 数字。
+   *  取值偏小是因为片段首尾的空白已被 tools/trim-audio.py 裁掉，
+   *  再给大停顿会变成一顿一顿的。 */
+  gapWeatherToTemp: 70,
+  /** 句内停顿（毫秒）：数字 → 「到」→ 数字度。
+   *  这一处要更短，「五…到…十五度」才连贯。 */
+  gapNumber: 50,
   /** 句间停顿（毫秒）：一句播报结束 → 下一城市 */
-  gapBetweenCities: 1100,
+  gapBetweenCities: 900,
   /** 开始播报前留白（毫秒），等背景音乐起拍 */
-  introDelay: 1600,
+  introDelay: 1200,
   /** 背景音乐音量 */
   musicVolume: 0.30,
   /** 人声音量 */

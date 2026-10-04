@@ -103,9 +103,14 @@ for (const file of mainPageJs) {
     seenSelectors.push({ file, sel: `#${m[1]}`, id: m[1] });
   }
 }
-// #error-overlay 由 boot.js 的错误浮层在运行时动态创建，#status-text 是大屏版才有的节点
-// （极简版的 index.html 刻意没有它，screen.js 用可选写入），都不算契约缺失
-const RUNTIME_CREATED = new Set(['error-overlay', 'status-text']);
+// 运行时动态创建、HTML 里刻意不写的节点：
+//   error-overlay  —— boot.js 的错误浮层
+//   status-text    —— 只有大屏版才有的可见状态栏
+//   start-overlay / btn-start / start-hint —— 「进去就自动播报」后已从 HTML 删除，
+//                     仅在浏览器拦截自动播放时由 main.js 的 ensureAutoplay() 动态生成
+const RUNTIME_CREATED = new Set([
+  'error-overlay', 'status-text', 'start-overlay', 'btn-start', 'start-hint',
+]);
 const missingIds = seenSelectors.filter((s) => !entryIds.has(s.id) && !RUNTIME_CREATED.has(s.id));
 if (missingIds.length) {
   for (const s of missingIds) fail(s.file, `selector "${s.sel}" 在 ${entryHtml} 里找不到 #${s.id}`);
@@ -114,21 +119,23 @@ console.log(
   `  ${missingIds.length === 0 ? '✓' : '✗'} 主页面 ${seenSelectors.length} 处 id 选择器全部命中`,
 );
 
-// index.html 必需的 id（极简版契约：满屏壁纸 + 居中大字 + 开始遮罩 + 音乐开关 + 隐藏状态位）
+// index.html 必需的 id（极简版契约：满屏壁纸 + 居中大字 + 音乐开关 + 隐藏状态位）
 const REQUIRED = [
   'app', 'bg', 'bg-img-a', 'bg-img-b', 'bg-scene', 'card', 'city-zh', 'city-en',
   'weather-row', 'weather-icon', 'weather-zh', 'weather-en', 'temp-row', 'temp-c',
-  'btn-music', 'start-overlay', 'btn-start', 'start-hint', 'sr-only-status',
+  'btn-music', 'sr-only-status',
 ];
 const lostIds = REQUIRED.filter((id) => !entryIds.has(id));
 if (lostIds.length) lostIds.forEach((id) => fail(entryHtml, `缺少必需节点 #${id}`));
 console.log(`  ${lostIds.length === 0 ? '✓' : '✗'} 极简版契约要求的 ${REQUIRED.length} 个 id 齐全`);
 
-// 极简改版要求删掉的节点：如果又出现在 HTML 里（例如有人回退了改版），这里要报警
+// 极简改版 + 「进去就自动播报」要求删掉的节点。
+// start-overlay / btn-start 已从 HTML 移除：只在浏览器拦截自动播放时由 main.js 动态创建。
 const MUST_BE_GONE = [
   'hud', 'progress-track', 'progress-fill', 'hud-row', 'progress-text', 'hud-buttons',
   'btn-prev', 'btn-play', 'btn-next', 'btn-shuffle', 'status-text',
   'meta-row', 'local-time', 'precip', 'wind', 'temp-f',
+  'start-overlay', 'btn-start', 'start-hint',
 ];
 const resurrected = MUST_BE_GONE.filter((id) => entryIds.has(id));
 if (resurrected.length) {

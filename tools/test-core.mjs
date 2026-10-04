@@ -19,7 +19,7 @@ const { numToZh, tempC, toF, weatherOf, describeCard, dayLabel } = await import(
 const { pickCities, buildCards, uniqueCities, isDomestic } = await import(
   new URL('../js/core/cards.js', import.meta.url)
 );
-const { cityAudioPath, weatherAudioPath, wordAudioPath, tempAudioPath, musicPath } = await import(
+const { cityAudioPath, weatherAudioPath, wordAudioPath, tempAudioPath, numAudioPath, musicPath } = await import(
   new URL('../js/core/paths.js', import.meta.url)
 );
 
@@ -87,13 +87,18 @@ check('每种天气都有语音片段', () => {
   const missing = [...keys].filter((k) => !audioManifest.files[`zh/weather/${k}.mp3`]);
   assert.equal(missing.length, 0, `缺：${missing}`);
 });
-check('0~42 温度片段齐全', () => {
+check('0~42 温度片段齐全（自带「度」）', () => {
   const missing = [];
   for (let n = 0; n <= 42; n++) if (!audioManifest.files[`zh/temp/t${n}.mp3`]) missing.push(n);
   assert.equal(missing.length, 0, `缺：${missing}`);
 });
+check('0~42 纯数字片段齐全（温度区间前半段用，不带「度」）', () => {
+  const missing = [];
+  for (let n = 0; n <= 42; n++) if (!audioManifest.files[`zh/num/n${n}.mp3`]) missing.push(n);
+  assert.equal(missing.length, 0, `缺：${missing}`);
+});
 check('连接词片段齐全', () => {
-  for (const k of ['dao', 'du']) assert.ok(audioManifest.files[`zh/word/${k}.mp3`], `缺 ${k}`);
+  for (const k of ['dao']) assert.ok(audioManifest.files[`zh/word/${k}.mp3`], `缺 ${k}`);
 });
 check('背景音乐已生成', () => {
   assert.ok(audioManifest.music?.length, '清单里没有音乐文件');
@@ -242,15 +247,17 @@ check('describeCard 文案与音频片段一致', () => {
   };
   const d = describeCard(card);
   assert.equal(d.zhText, '济南 多云 十二到二十四度');
+  // 温度区间读法：前半段是「纯数字」，后半段「数字+度」→ 拼出来「十二到二十四度」
   assert.deepEqual(
     d.segments.map((s) => `${s.kind}:${s.key}`),
-    ['city:jinan', 'weather:duoyun', 'temp:t12', 'word:dao', 'temp:t24', 'word:du'],
+    ['city:jinan', 'weather:duoyun', 'num:n12', 'word:dao', 'temp:t24'],
   );
   for (const seg of d.segments) {
     const rel = {
       city: `zh/city/${seg.key}.mp3`,
       weather: `zh/weather/${seg.key}.mp3`,
       temp: `zh/temp/${seg.key}.mp3`,
+      num: `zh/num/${seg.key}.mp3`,
       word: `zh/word/${seg.key}.mp3`,
     }[seg.kind];
     assert.ok(audioManifest.files[rel], `音频片段缺失：${rel}`);
@@ -271,12 +278,14 @@ check('所有城市 × 全部天气 × 温度极值都能生成完整音频序�
     for (const code of codes) {
       for (const [tMax, tMin] of [[42, 0], [24, 12], [-5, -10]]) {
         const d = describeCard({ city, day: { code, tMax, tMin }, dayIndex: 0 });
-        assert.ok(d.segments.length >= 6, `${city.id}/${code} 片段过少`);
+        // 一句播报现在是 5~7 段：城市 + 天气(1~2) + 数字 + 到 + 数字度
+        assert.ok(d.segments.length >= 5, `${city.id}/${code} 片段过少`);
         for (const seg of d.segments) {
           const rel = {
             city: `zh/city/${seg.key}.mp3`,
             weather: `zh/weather/${seg.key}.mp3`,
             temp: `zh/temp/${seg.key}.mp3`,
+            num: `zh/num/${seg.key}.mp3`,
             word: `zh/word/${seg.key}.mp3`,
           }[seg.kind];
           assert.ok(audioManifest.files[rel], `音频缺失：${rel}（${city.id}/${code}）`);
@@ -300,6 +309,7 @@ function relOf(seg) {
     weather: () => weatherAudioPath(seg.key),
     word: () => wordAudioPath(seg.key),
     temp: () => tempAudioPath(seg.key),
+    num: () => numAudioPath(seg.key),
   }[seg.kind]();
   return url.replace(/^assets\/audio\//, '');
 }

@@ -18,10 +18,16 @@ const PLAY_FALLBACK_MS = 15000;
 /** 兜底超时 = 片段时长 + 这段余量 */
 const PLAY_TAIL_MS = 3000;
 
-/** 相邻片段之间的停顿：city → weather 用 gapCityToWeather，其余相邻关系用 gapWeatherToTemp */
+/** 相邻片段之间的停顿。
+ *  city → weather 用 gapCityToWeather；
+ *  温度区间内部（数字 → 到 → 数字度）用更短的 gapNumber，这样「五到十五度」才连贯；
+ *  其余相邻关系用 gapWeatherToTemp。 */
 export function gapBetween(prev, next) {
   if (!prev || !next) return 0;
   if (prev.kind === 'city' && next.kind === 'weather') return AUDIO.gapCityToWeather;
+  if (prev.kind === 'num' || next.kind === 'num' || prev.key === 'dao' || next.key === 'dao') {
+    return AUDIO.gapNumber ?? 50;
+  }
   return AUDIO.gapWeatherToTemp;
 }
 
