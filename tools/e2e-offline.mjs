@@ -242,9 +242,13 @@ for (let i = 0; i < 40; i++) {
 console.log(`      缓存分区：${inventory.names?.join(', ')}`);
 check('核心资源已预缓存（≥20 项）', inventory.core >= 20, `${inventory.core} 项`);
 
-// 再点一次开始，让语音与音乐进入缓存。
-// Service Worker 在 boot() 开头就注册了，所以此时通常已经就绪。
-await evaluate(`document.getElementById('btn-start').click()`);
+// 语音与音乐现在会自动进入缓存：语音包由 AudioPreloader 在加载页期间整包下载，
+// 音乐由 boot 后的自动播报拉取。不需要再点任何按钮（极简版也已没有「开始播报」）。
+await evaluate(`(async () => {
+  const st = window.__wr?.state;
+  if (st && !st.playing && !st.paused) window.__wr?.begin?.();
+  return true;
+})()`);
 await sleep(8000);
 let afterAudio = 0;
 for (let i = 0; i < 20; i++) {

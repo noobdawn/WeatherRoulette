@@ -108,8 +108,9 @@ for (const file of mainPageJs) {
 //   status-text    —— 只有大屏版才有的可见状态栏
 //   start-overlay / btn-start / start-hint —— 「进去就自动播报」后已从 HTML 删除，
 //                     仅在浏览器拦截自动播放时由 main.js 的 ensureAutoplay() 动态生成
+//   wr-loading     —— 毛玻璃加载界面，由 js/ui/loading.js 动态注入
 const RUNTIME_CREATED = new Set([
-  'error-overlay', 'status-text', 'start-overlay', 'btn-start', 'start-hint',
+  'error-overlay', 'status-text', 'start-overlay', 'btn-start', 'start-hint', 'wr-loading',
 ]);
 const missingIds = seenSelectors.filter((s) => !entryIds.has(s.id) && !RUNTIME_CREATED.has(s.id));
 if (missingIds.length) {

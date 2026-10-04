@@ -8,7 +8,7 @@
 //
 // 前置：python tools/serve.py -p 8099
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -486,6 +486,51 @@ if (CLICK_START) {
     check('页面里没有「开始播报」遮罩（除非自动播放被拦截）',
       !(await session.eval(`!!document.getElementById('start-overlay')`)),
       '正常情况下应为 false');
+
+    // ---- 毛玻璃加载界面 ----
+    const timings = await session.eval(`window.__wrTimings ?? null`);
+    let loadingGone = false;
+    try {
+      // 淡出 450ms 后才移除，所以这里等它真的消失再断言
+      await session.waitFor(`!document.getElementById('wr-loading')`,
+        { timeoutMs: 8000, label: '加载界面被移除' });
+      loadingGone = true;
+    } catch { /* 下面断言会给出失败 */ }
+    check('加载界面已收起（开播后不再挡屏）', loadingGone);
+    if (timings) {
+      const preMs = timings.preloadDoneAt - timings.loadingShownAt;
+      const playMs = timings.playingAt - timings.loadingShownAt;
+      const p = timings.preload ?? {};
+      console.log(`      加载页停留：${preMs}ms 后预下载完成，${playMs}ms 后开播`);
+      console.log(`      预下载：${p.done}/${p.total} 个片段，${((p.bytes ?? 0) / 1024).toFixed(0)} KB，${p.ms}ms，失败 ${p.failed}`);
+      check('整个语音包已预下载（开播前就绪，后续换城不再等网络）',
+        p.total > 0 && p.done === p.total && (p.failed ?? 0) === 0,
+        `${p.done}/${p.total}，失败 ${p.failed}`);
+      const expectedClips = (() => {
+        try {
+          const man = JSON.parse(readFileSync(path.join(ROOT, 'assets', 'audio', 'manifest.json'), 'utf8'));
+          return Object.keys(man.files ?? {}).filter((k) => k.startsWith('zh/')).length;
+        } catch {
+          return 0;
+        }
+      })();
+      check('预下载覆盖清单里的全部语音片段',
+        expectedClips > 0 && p.total === expectedClips,
+        `${p.total} / 清单 ${expectedClips} 个`);
+      check('预下载耗时合理（< 15s）', (p.ms ?? 99999) < 15000, `${p.ms}ms`);
+    } else {
+      check('存在加载计时埋点', false, '拿不到 window.__wrTimings');
+    }
+    // 加载界面用的是 backdrop-filter 毛玻璃
+    const glassCss = await session.eval(`(() => {
+      const found = [...document.styleSheets].some((s) => {
+        try { return [...s.cssRules].some((r) => /#wr-loading/.test(r.selectorText || '') && /backdrop-filter/.test(r.cssText)); }
+        catch { return false; }
+      });
+      return found;
+    })()`);
+    check('加载界面有毛玻璃样式（backdrop-filter）', glassCss === true);
+
     const status = await session.eval(
       `document.getElementById(${JSON.stringify(P.status)})?.textContent.trim() ?? ''`,
     );

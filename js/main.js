@@ -8,9 +8,11 @@ import { pickCities, buildCards, uniqueCities } from './core/cards.js';
 import { shuffled } from './core/utils.js';
 import { loadAudioManifest, audioUrlFor, manifestHas } from './audio/manifest.js';
 import { ClipLoader } from './audio/loader.js';
+import { AudioPreloader } from './audio/preload.js';
 import { MusicPlayer } from './audio/music.js';
 import { Broadcaster } from './audio/player.js';
 import { Screen } from './ui/screen.js';
+import { LoadingScreen } from './ui/loading.js';
 import { loadImageManifest, resolveCityImage } from './ui/assets.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -31,18 +33,65 @@ function dropUnlockOverlay() {
 }
 
 /**
+ * 把语音清单里的每一个片段都变成 {kind,key}，用于整包预下载。
+ * 清单键形如 zh/city/beijing.mp3、zh/temp/t24.mp3、zh/num/n5.mp3、zh/word/dao.mp3。
+ */
+function everyClipSegments(audioManifest) {
+  const out = [];
+  for (const rel of Object.keys(audioManifest.files ?? {})) {
+    const m = rel.match(/^zh\/([a-z]+)\/(.+)\.mp3$/);
+    if (m) out.push({ kind: m[1], key: m[2] });
+  }
+  return out;
+}
+
+/**
+ * 预下载语音包，并把进度画到毛玻璃加载界面上。
+ * 设定等待上限：网络很慢时不能让用户一直卡在加载页，
+ * 到点就放行开播（未下完的片段，播放时按需加载仍能补救）。
+ */
+async function runPreload(preloader, loading, segments, { maxMs = 20000 } = {}) {
+  const startedAt = Date.now();
+  let elapsed = 0;
+  const result = await Promise.race([
+    preloader.load(segments, {
+      onProgress: (p) => {
+        elapsed = Date.now() - startedAt;
+        loading.setProgress({ done: p.done, total: p.total, bytes: p.bytes });
+        // 进度太慢就提示一下，免得用户以为卡死了
+        if (elapsed > 6000 && p.ratio < 0.6) {
+          loading.setHint('网络较慢，还在下载语音包…也可以直接开始');
+        }
+      },
+    }),
+    new Promise((resolve) => {
+      setTimeout(() => {
+        preloader.abort();
+        resolve({
+          total: preloader.total, done: preloader.done, failed: -1,
+          bytes: preloader.loadedBytes, ms: Date.now() - startedAt, timedOut: true,
+        });
+      }, maxMs);
+    }),
+  ]);
+  loading.setProgress({ done: result.total, total: result.total, bytes: result.bytes });
+  return result;
+}
+
+/**
  * 自动播放。
- * 浏览器（尤其移动端 Safafi/Chrome）在没有用户手势时会拦截有声音的播放，
+ * 浏览器（尤其移动端 Safari/Chrome）在没有用户手势时会拦截有声音的播放，
  * 所以这里先直接试一次：成功就什么都不显示、直接开始播报；
  * 只有被拦截时才生成一个极简遮罩请用户点一下——这是浏览器策略决定的，无法用代码绕过。
  */
-function ensureAutoplay(music, onReady) {
+function ensureAutoplay(music, onReady, loading = null) {
   return new Promise((resolve) => {
     let settled = false;
     const succeed = () => {
       if (settled) return;
       settled = true;
       dropUnlockOverlay();
+      loading?.hide();
       document.body.classList.add('is-started');
       console.info('[WeatherRoulette] 自动播放已解锁，直接开始播报');
       onReady();
@@ -53,6 +102,7 @@ function ensureAutoplay(music, onReady) {
       settled = true;
       console.warn('[WeatherRoulette] 浏览器拦截了自动播放，显示一次性解锁按钮');
       const box = showUnlockOverlay(() => {
+        loading?.hide();
         document.body.classList.add('is-started');
         onReady();
         resolve(true);
@@ -231,18 +281,49 @@ async function boot() {
     },
   });
 
-  // 4. 先给第一张卡片铺好背景和声音，避免开场空白
+  // 4. 进页面先盖一层毛玻璃加载界面，然后并行做两件事：
+  //    ① 渲染第一张卡片（挂壁纸，透过磨砂玻璃能看到城市轮廓）
+  //    ② 预下载整轮播报要用的全部语音片段
+  //    两者都好了才淡出并开播 —— 这样开播后换城、念句子都不用再等网络。
   const first = nextCards();
+  const preloader = new AudioPreloader();
+  const loading = new LoadingScreen(document);
+  loading.show({ hint: '正在把语音包下载到本地，全部准备好后自动开始' });
+  // 计时埋点：给自动化测试与现场排查用（也能回答「为什么等了这么久」）
+  const timings = { loadingShownAt: Date.now(), preloadDoneAt: 0, playingAt: 0, preload: null };
+  window.__wrTimings = timings;
+
+  const allSegments = first
+    .flatMap((c) => describeCard(c).segments)
+    .filter((s) => manifestHas(audioManifest, s));
+
+  // 预下载范围：整个语音包（不只是这一轮用到的片段）。
+  // 理由：整包才 141 个片段 / 约 0.9 MB，缓存命中时几乎是瞬间完成；
+  // 一次性全下完，之后无论切到哪个城市、哪种天气、哪段温度都不可能再等网络，
+  // 而且这些片段也会被 Service Worker 缓存下来，离线可用。
+  const everyClip = everyClipSegments(audioManifest);
+
+  const [, preloadResult] = await Promise.all([
+    first.length
+      ? renderCard(screen, first[0], 0, first.length, imageManifest, { preload: true })
+      : Promise.resolve(null),
+    runPreload(preloader, loading, everyClip.length ? everyClip : allSegments),
+  ]);
+  timings.preloadDoneAt = Date.now();
+  timings.preload = preloadResult;
+
+  // 顺手把前几张卡片的 Audio 元素预热（已经命中的缓存，几乎瞬间完成）
   if (first.length) {
-    const desc = describeCard(first[0]);
-    await renderCard(screen, first[0], 0, first.length, imageManifest, { preload: true });
-    const preloads = first
-      .slice(0, 3)
-      .flatMap((c) => describeCard(c).segments)
-      .filter((s) => manifestHas(audioManifest, s))
-      .map(audioUrlFor);
-    loader.preloadAll(preloads);
+    loader.preloadAll(
+      first.slice(0, 3).flatMap((c) => describeCard(c).segments)
+        .filter((s) => manifestHas(audioManifest, s))
+        .map(audioUrlFor),
+    );
   }
+  console.info(
+    `[WeatherRoulette] 语音包预下载完成：${preloadResult.done}/${preloadResult.total} 个片段，`
+    + `${(preloadResult.bytes / 1024).toFixed(0)} KB，用时 ${preloadResult.ms}ms，失败 ${preloadResult.failed} 个`,
+  );
 
   // 5. 状态写进隐藏状态位（界面上不显示任何提示文案：进去就该直接播报）
   {
@@ -311,6 +392,7 @@ async function boot() {
   const beginBroadcast = async () => {
     if (broadcastStarted) return;
     broadcastStarted = true;
+    if (window.__wrTimings) window.__wrTimings.playingAt = Date.now();
     // Service Worker 已经在 boot() 开头注册过，这里只等它就绪并补缓存音乐与壁纸
     swReady.then((reg) => {
       const worker = reg?.active || navigator.serviceWorker?.controller;
@@ -326,7 +408,7 @@ async function boot() {
     await broadcaster.start();
   };
   window.__wr.begin = beginBroadcast;
-  await ensureAutoplay(music, beginBroadcast);
+  await ensureAutoplay(music, beginBroadcast, loading);
 
   // 每 30 分钟自动刷新一次天气数据
   setInterval(() => {
