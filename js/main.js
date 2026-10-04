@@ -76,33 +76,51 @@ async function runPreload(preloader, loading, segments) {
  * 自动播放。
  * 浏览器（尤其移动端 Safari/Chrome）在没有用户手势时会拦截有声音的播放，
  * 所以这里先直接试一次：成功就什么都不显示、直接开始播报；
- * 只有被拦截时才生成一个极简遮罩请用户点一下——这是浏览器策略决定的，无法用代码绕过。
+ * 只有被拦截时才请用户点一下——这是浏览器策略决定的，无法用代码绕过。
+ *
+ * ⚠ 曾经的 bug：静音探针里的 AudioContext.resume() 在 iOS Safari 上可能既不 resolve
+ * 也不 reject，于是成功与解锁两条路都不走，界面永远停在「183/183」。
+ * 现在所有异步分支都有超时兜底，并且**任何触摸/点击都会立刻开播**。
+ *
+ * @param {object} skipGate {fire} —— 加载页「强制进入」按钮的回调出口
+ * @param {object} diag 诊断信息，手机上出问题时可从 window.__wrDiag 读到卡在哪一步
  */
-function ensureAutoplay(music, onReady, loading = null) {
+function ensureAutoplay(music, onReady, loading = null, { skipGate = null, diag = null } = {}) {
   return new Promise((resolve) => {
     let settled = false;
-    const succeed = () => {
+    const note = (k, v) => { if (diag) diag[k] = v; };
+
+    const finish = (how) => {
       if (settled) return;
       settled = true;
+      note('decision', how);
       dropUnlockOverlay();
       loading?.hide();
       document.body.classList.add('is-started');
-      console.info('[WeatherRoulette] 自动播放已解锁，直接开始播报');
+      console.info(`[WeatherRoulette] 开始播报（${how}）`);
       onReady();
       resolve(true);
     };
-    const showUnlock = () => {
+
+    const succeed = (how) => {
+      note('how', how);
+      finish(`auto:${how}`);
+    };
+
+    const showUnlock = (why) => {
       if (settled) return;
       settled = true;
-      console.warn('[WeatherRoulette] 浏览器拦截了自动播放，显示一次性解锁按钮');
-      const box = showUnlockOverlay(() => {
-        loading?.hide();
-        document.body.classList.add('is-started');
-        onReady();
-        resolve(true);
-      });
-      void box;
+      note('decision', 'unlock');
+      note('why', why);
+      console.warn(`[WeatherRoulette] 浏览器拦截了自动播放（${why}），请用户点一下`);
+      showUnlockOverlay(() => finish('unlock-button'), { autoFireMs: 300 });
+      loading?.setHint?.('点一下屏幕开始播报');
+      // 兜底：点屏幕上任何地方都能开播，避免用户没注意到按钮
+      armAnyGesture(() => finish('unlock-gesture'));
     };
+
+    // 加载页上的「强制进入」：不等下载完，立刻开播
+    if (skipGate) skipGate.fire = () => finish('skip');
 
     // 先试着真的播一下（这同时会把音乐解锁）。
     // 注意：music.fadeIn() 被浏览器拦截时**不会 reject**，而是 resolve(false)，
@@ -118,17 +136,45 @@ function ensureAutoplay(music, onReady, loading = null) {
       (ok) => {
         const audio = music?.audio;
         const actuallyPlaying = !audio || audio.paused === false;
-        if (ok !== false && actuallyPlaying) succeed();
-        else showUnlock();
+        if (ok !== false && actuallyPlaying) succeed('music');
+        else showUnlock(`music ok=${ok} paused=${audio ? audio.paused : 'n/a'}`);
       },
-      showUnlock,
+      (err) => showUnlock(`music rejected: ${err?.name ?? err}`),
     );
 
-    // 更靠得住的一道：用静音缓冲区探一下浏览器准不准我们出声（不产生任何可听声音）
-    probeSilentAudio().then((allowed) => { if (allowed) succeed(); else showUnlock(); });
-    // 兜底：探针和音乐都没结论时，就当被拦截处理
-    setTimeout(() => { if (!settled) showUnlock(); }, 2500);
+    // 静默探针：不产生任何可听声音，用来判断浏览器是否允许自动出声。
+    // 必须带超时——iOS 上 resume() 可能永远悬着（就是之前卡住 183/183 的原因）。
+    probeSilentAudio().then(
+      (allowed) => { if (allowed) succeed('silent-probe'); else showUnlock('silent-probe: suspended'); },
+      () => showUnlock('silent-probe: threw'),
+    );
+
+    // 兜底：音乐与探针都没给出结论时，按被拦截处理（宁可多要一次点击，也不能卡住）
+    setTimeout(() => { if (!settled) showUnlock('timeout'); }, 2500);
   });
+}
+
+/**
+ * 一旦用户在页面上做任何手势（点、摸、按键）就立刻开播。
+ * 移动端最常见的情况就是自动播放被拦、而用户又没注意到解锁按钮——
+ * 这一层保证「随便点一下就能开始」。
+ */
+function armAnyGesture(fire, { autoFireMs = 300, ttlMs = 5 * 60 * 1000 } = {}) {
+  const events = ['pointerdown', 'touchstart', 'click', 'keydown'];
+  let armed = false;
+  const once = () => {
+    if (armed) return;
+    armed = true;
+    for (const e of events) document.removeEventListener(e, once, true);
+    clearTimeout(timer);
+    resumePendingAudio();
+    // 稍等一拍：让这一次手势先把音频解出来，再开播（Safari 上尤其必要）
+    setTimeout(fire, autoFireMs);
+  };
+  for (const e of events) document.addEventListener(e, once, true);
+  const timer = setTimeout(() => {
+    for (const e of events) document.removeEventListener(e, once, true);
+  }, ttlMs);
 }
 
 /**
@@ -141,22 +187,48 @@ async function probeSilentAudio() {
   if (!Ctx) return false;
   try {
     const ctx = new Ctx();
-    if (ctx.state === 'suspended') await ctx.resume();
-    const buf = ctx.createBuffer(1, 1, ctx.sampleRate || 44100);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    src.start(0);
+    // iOS Safari 上 resume() 可能既不 resolve 也不 reject（页面还没被激活时），
+    // 所以必须自己加超时，否则 await 会把整条链路挂死。
+    if (ctx.state === 'suspended') {
+      await Promise.race([
+        ctx.resume().catch(() => {}),
+        new Promise((r) => setTimeout(r, 600)),
+      ]);
+    }
     const ok = ctx.state === 'running';
-    setTimeout(() => { try { ctx.close(); } catch { /* 忽略 */ } }, 100);
-    return ok;
+    if (ok) {
+      // 确实没被挂起：播一个全零缓冲区确认能出声，然后立刻关掉
+      const buf = ctx.createBuffer(1, 1, ctx.sampleRate || 44100);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start(0);
+      setTimeout(() => { try { ctx.close(); } catch { /* 忽略 */ } }, 100);
+      return true;
+    }
+    // 被挂起了：留着这个 context，等用户第一次手势时 resume
+    pendingAudioCtx = ctx;
+    return false;
   } catch {
     return false;
   }
 }
 
+/** 被挂起的 AudioContext：等用户手势时 resume，让音乐/播报能立刻出声 */
+let pendingAudioCtx = null;
+
+function resumePendingAudio() {
+  const ctx = pendingAudioCtx;
+  pendingAudioCtx = null;
+  if (!ctx) return;
+  try {
+    ctx.resume().catch(() => {});
+    setTimeout(() => { try { ctx.close(); } catch { /* 忽略 */ } }, 200);
+  } catch { /* 忽略 */ }
+}
+
 /** 动态生成「点一下开始」兜底遮罩，复用 style.css 里 #start-overlay 的样式 */
-function showUnlockOverlay(onClick) {
+function showUnlockOverlay(onClick, { autoFireMs = 300 } = {}) {
   if (document.getElementById('start-overlay')) return document.getElementById('start-overlay');
   const doc = document;
   const box = doc.createElement('div');
@@ -179,10 +251,12 @@ function showUnlockOverlay(onClick) {
   app.append(box);
 
   const fire = () => {
+    // 关键：先让这一次手势把音频解出来，再开播（Safari 上尤其必要）
+    resumePendingAudio();
     box.classList.add('is-hidden');
     setTimeout(() => box.remove(), 450);
     document.removeEventListener('keydown', onKey);
-    onClick();
+    setTimeout(onClick, autoFireMs);
   };
   const onKey = (e) => {
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); fire(); }
@@ -281,11 +355,30 @@ async function boot() {
   //    两者都好了才淡出并开播 —— 这样开播后换城、念句子都不用再等网络。
   const first = nextCards();
   const preloader = new AudioPreloader();
-  const loading = new LoadingScreen(document);
-  loading.show({ hint: '正在把语音包下载到本地，全部准备好后自动开始' });
+  // 加载页上的「强制进入」按钮：跳过剩余下载立刻开播。
+  // 用间接引用是因为 beginBroadcast / ensureAutoplay 在下面才定义。
+  const skipGate = { fire: null };
+  const loading = new LoadingScreen(document, {
+    onSkip: () => {
+      preloader.abort();
+      if (skipGate.fire) skipGate.fire();
+      else loading.hide();
+    },
+  });
+  loading.show();
   // 计时埋点：给自动化测试与现场排查用（也能回答「为什么等了这么久」）
   const timings = { loadingShownAt: Date.now(), preloadDoneAt: 0, playingAt: 0, preload: null };
   window.__wrTimings = timings;
+  // 自动播放诊断：手机上出问题时，在地址栏输入 javascript: 或连电脑控制台执行 window.__wrDiag
+  const diag = {
+    ua: navigator.userAgent,
+    loadingShownAt: timings.loadingShownAt,
+    preloadDoneAt: 0,
+    decision: null,
+    how: null,
+    why: null,
+  };
+  window.__wrDiag = diag;
 
   const allSegments = first
     .flatMap((c) => describeCard(c).segments)
@@ -402,7 +495,7 @@ async function boot() {
     await broadcaster.start();
   };
   window.__wr.begin = beginBroadcast;
-  await ensureAutoplay(music, beginBroadcast, loading);
+  await ensureAutoplay(music, beginBroadcast, loading, { skipGate, diag });
 
   // 每 30 分钟自动刷新一次天气数据
   setInterval(() => {
