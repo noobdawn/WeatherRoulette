@@ -15,8 +15,15 @@
 // 反过来，如果去插值 up 向量本身（或者让相机俯仰角跟着城市纬度走），
 // 两侧就会倾斜、北不再朝上 —— 这正是本模块要避免的朴素做法。
 //
-// 依赖：js/core/constants.js 的 GLOBE（可能还没加上，所以有完整兜底）、
-//       js/ui/globe-data.js 的 LAND / BORDERS（动态 import，避免拖慢首屏）。
+// ─────────────────────────── 两代渲染，一套相机 ───────────────────────────
+// 第二代（WebGL，优先）：NASA Blue Marble 真实卫星影像 + 法线贴图实时漫反射
+//                        + 国家淡色蒙版 + 大气边缘光 + 海洋高光。
+// 第一代（Canvas 2D，兜底）：用海岸线数据画的矢量卡通地球。
+//   WebGL 不可用、贴图加载失败、上下文丢失时自动回退到第一代，**绝不留白、绝不报错到界面**。
+// 两条路径共用下面同一套相机基与 slerp，所以「正北朝上」在哪种渲染下都成立。
+//
+// 依赖：js/core/constants.js 的 GLOBE / GLOBE_TEXTURES_DIR（都做了完整兜底）、
+//       js/ui/globe-data.js 的 LAND / BORDERS（降级路径用，动态 import，不拖慢首屏）。
 
 import * as constants from '../core/constants.js';
 
@@ -30,6 +37,9 @@ const GLOBE_FALLBACK = {
   minLat: -85,
   maxLat: 85,
 };
+
+/** 贴图目录兜底（constants.js 里是 GLOBE_TEXTURES_DIR） */
+const TEXTURES_DIR_FALLBACK = 'assets/globe';
 
 function readGlobeConfig() {
   const raw = constants && typeof constants === 'object' ? constants.GLOBE : null;
@@ -50,6 +60,12 @@ function readGlobeConfig() {
     minLat: Math.min(minLat, maxLat - 1),
     maxLat,
   };
+}
+
+function readTexturesDir() {
+  const v = constants && typeof constants === 'object' ? constants.GLOBE_TEXTURES_DIR : null;
+  if (typeof v === 'string' && v) return v.replace(/\/+$/, '') + '/';
+  return TEXTURES_DIR_FALLBACK + '/';
 }
 
 // ───────────────────────────────────────────────────────────── 小工具
@@ -84,6 +100,11 @@ function sphereVec(lat, lon, out = [0, 0, 0]) {
   out[1] = Math.sin(la);
   out[2] = cl * Math.cos(lo);
   return out;
+}
+
+/** 等距圆柱贴图坐标（与 assets/globe 的约定一致：第一行是北极）。 */
+function geoUv(lat, lon) {
+  return [(wrapLon(lon) + 180) / 360, (90 - clamp(lat, -90, 90)) / 180];
 }
 
 /**
@@ -221,7 +242,8 @@ function easePlateau(p) {
   return s * s * (3 - 2 * s);
 }
 
-// ───────────────────────────────────────────────────────────── 几何缓存
+// ───────────────────────────────────────────────────────────── 2D 几何缓存
+// （第一代渲染路径与前景图层的公共部件：把经纬坐标预转成世界坐标，逐帧只做投影）
 const _scratch = {
   s: new Float64Array(2048), // 每个顶点的半球判据
   out: new Float64Array(3 * 4096), // 裁剪后的 3D 顶点
@@ -276,7 +298,7 @@ function graticuleVec() {
   return _gratCache;
 }
 
-/** 整颗球当前是否完全落在可见半球之外（可以整块跳过）。 */
+/** 整条折线当前是否完全落在可见半球之外（可以整块跳过）。 */
 function ringHidden(vec, dir) {
   const n = vec.length / 3;
   const dx = dir[0];
@@ -423,7 +445,7 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.lineTo(x + rr, y + h);
   ctx.arcTo(x, y + h, x, y + h - rr, rr);
   ctx.lineTo(x, y + rr);
-  ctx.arcTo(x, y, x + rr, y, rr);
+  ctx.arcTo(x, y + rr, x + rr, y, rr);
   ctx.closePath();
 }
 
@@ -441,7 +463,7 @@ function normalizeCity(c) {
   };
 }
 
-// 配色：扁平卡通，面向 4~6 岁，保证大陆轮廓一眼可辨
+// 配色：前景图层（弧线 / 标记 / 标签），第一代地球也用它
 const COLORS = {
   land: '#4aa96c',
   landEdge: '#2f7d4d',
@@ -460,13 +482,682 @@ const STAR_COUNT = 220;
 const OVERLAY_CLASS = 'wr-globe-overlay';
 const STYLE_ID = 'wr-globe-style';
 
+// ═══════════════════════════════════════════════════════════════
+// 第二代渲染：WebGL
+// ═══════════════════════════════════════════════════════════════
+
+/** 视觉调参集中在这里，改风格只动这一块。 */
+const TUNE = {
+  // 光照方向按**相机系**给：世界系固定光会让某些城市对转过去后整片背光。
+  // 相机系的光一样满足「地球在转、山脉明暗在变」，但整颗球永远是亮的。
+  lightCam: [-0.46, 0.52, 0.72], // right / up / dir 三个分量
+  diffuse: 0.72,
+  ambient: 0.42, // 环境光下限（暗面也留可读性，别做成冷峻军事地图）
+  rim: 0.62, // 大气边缘光强度
+  rimPower: 2.6,
+  spec: 0.42, // 海洋高光
+  specPower: 34.0,
+  bump: 2.6, // 法线扰动强度（法线贴图本身很平，放大后山体才有立体感）
+  oceanBump: 0.06, // 海洋压平（贴图里海洋已经是 (0,0,1)，这里再兜一层）
+  country: 0.17, // 国家淡色蒙版强度
+  grid: 0.10, // 经纬网
+  gridPx: 1.15, // 经纬网线宽（CSS 像素）
+  exposure: 0.98,
+  saturation: 0.05, // 往灰度拉多少（贴图本身已降饱和，这里只补一点点）
+};
+
+// ── 着色器 ────────────────────────────────────────────────────
+// 用 GLSL ES 1.00 写，WebGL1 / WebGL2 都能直接跑（WebGL2 兼容 ES 1.00 着色器）。
+const VS_QUAD = `
+attribute vec2 aPos;
+varying vec2 vPos;
+void main(){ vPos = aPos; gl_Position = vec4(aPos, 0.0, 1.0); }
+`;
+
+const FS_SKY = `
+precision mediump float;
+varying vec2 vPos;
+uniform vec2 uRes;      // CSS 像素
+uniform vec2 uCenter;   // 球心（CSS 像素，y 向下）
+uniform float uR;       // 球半径（CSS 像素）
+
+float hash21(vec2 p){
+  p = fract(p * vec2(123.34, 456.21));
+  p += dot(p, p + 45.32);
+  return fract(p.x * p.y);
+}
+// 一层星点：格子哈希出星的位置与亮度
+float starLayer(vec2 uv, float density, float size, float seed){
+  vec2 g = uv * density;
+  vec2 id = floor(g);
+  vec2 f = fract(g) - 0.5;
+  float h = hash21(id + seed);
+  vec2 off = vec2(hash21(id + seed + 1.7), hash21(id + seed + 5.3)) - 0.5;
+  float d = length(f - off * 0.66);
+  float b = smoothstep(size, 0.0, d);
+  return b * step(0.80, h) * (0.35 + 0.65 * hash21(id + seed + 9.1));
+}
+
+void main(){
+  // CSS 像素坐标，y 向下（与 worldToScreen 同一套约定）
+  vec2 px = vec2(vPos.x * 0.5 + 0.5, 0.5 - vPos.y * 0.5) * uRes;
+  float t = px.y / uRes.y;
+
+  vec3 sky = mix(vec3(0.020, 0.043, 0.118), vec3(0.043, 0.094, 0.204), smoothstep(0.0, 0.55, t));
+  sky = mix(sky, vec3(0.016, 0.043, 0.110), smoothstep(0.55, 1.0, t));
+
+  vec2 rel = (px - uCenter) / max(uR, 1.0);
+  float rr = length(rel);
+  float halo = exp(-max(rr - 0.85, 0.0) * 2.1) * 0.55 + exp(-pow((rr - 1.0) * 3.6, 2.0)) * 0.45;
+  vec3 col = sky + vec3(0.10, 0.24, 0.50) * halo;
+
+  vec2 suv = px / uRes.y;                       // 方形格子，星星不会是椭圆
+  float st = starLayer(suv, 26.0, 0.055, 11.0) + starLayer(suv, 15.0, 0.090, 37.0) * 1.25;
+  col += vec3(0.86, 0.92, 1.0) * min(st, 1.0);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+const VS_GLOBE = `
+attribute vec3 aPos;
+attribute vec2 aUv;
+uniform vec2 uRes;
+uniform vec2 uCenter;
+uniform float uR;
+uniform vec3 uRight;
+uniform vec3 uUp;
+uniform vec3 uDir;
+varying vec3 vN;
+varying vec2 vUv;
+void main(){
+  vec3 p = aPos;
+  // 与 worldToScreen() 完全一致：x = cx + v·right·R，y = cy − v·up·R
+  vec2 px = uCenter + vec2(dot(p, uRight), -dot(p, uUp)) * uR;
+  vec2 ndc = vec2(px.x / uRes.x * 2.0 - 1.0, 1.0 - px.y / uRes.y * 2.0);
+  gl_Position = vec4(ndc, -dot(p, uDir), 1.0);   // 正交投影，z 直接当深度用
+  vN = p;
+  vUv = aUv;
+}
+`;
+
+const FS_GLOBE = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec3 vN;
+varying vec2 vUv;
+
+uniform sampler2D uAlbedo;
+uniform sampler2D uNormalMap;
+uniform sampler2D uCountryMap;
+uniform sampler2D uPalette;
+uniform float uHasNormal;
+uniform float uHasCountry;
+uniform vec3 uLight;
+uniform vec3 uViewDir;
+uniform float uDiffuse;
+uniform float uAmbient;
+uniform float uRim;
+uniform float uRimPower;
+uniform float uSpec;
+uniform float uSpecPower;
+uniform float uBump;
+uniform float uOceanBump;
+uniform float uCountry;
+uniform float uGrid;
+uniform float uGridPx;
+uniform float uR;          // 球半径（CSS 像素），用来把经纬网线宽固定成屏幕像素
+uniform float uExposure;
+uniform float uSaturation;
+
+const float PI = 3.14159265359;
+
+void main(){
+  vec3 nGeo = normalize(vN);
+  vec3 albedo = texture2D(uAlbedo, vUv).rgb;
+
+  // ── 国家编号 + 陆地遮罩（countries.png 是 8bit 索引图，必须 NEAREST 采样）──
+  float id8 = 0.0;
+  float land = 1.0;
+  if (uHasCountry > 0.5) {
+    id8 = texture2D(uCountryMap, vUv).r * 255.0;
+    land = clamp(id8, 0.0, 1.0);           // 0 = 海洋，≥1 = 陆地
+  }
+  float ocean = 1.0 - land;
+
+  // ── 法线扰动 ──
+  // normal.jpg 由工具的 numpy 实现生成：nx = −∂h/∂col（+x 朝东）、ny = −∂h/∂row
+  // （+y 朝**南**，即贴图 v 增大的方向）。两条独立证据都指向这个约定：
+  //   1) 全球回归 corr(dLum/dRow, −ny)=+0.59、corr(dLum/dCol, −nx)=+0.44；
+  //   2) 沿经线积分 印度洋(8°N)→西藏(32°N) 在 −ny 约定下为正（西藏更高），
+  //      反过来恒为负，与真实地形相反。
+  // 若以后重新生成贴图改成了「+y 朝北」，把下面 south 那行的负号去掉
+  // （或者干脆把 lightCam 的 up 分量取反）即可。
+  vec3 n = nGeo;
+  if (uHasNormal > 0.5) {
+    vec3 nt = texture2D(uNormalMap, vUv).rgb * 2.0 - 1.0;
+    float k = mix(uOceanBump, 1.0, land);   // 海洋压平，不出现假山
+    // 极地附近等距圆柱的横向拉伸会把法线放大成「风车」条纹，这里把扰动淡出
+    k *= 1.0 - 0.82 * smoothstep(0.78, 0.97, abs(nGeo.y));
+    nt.xy *= uBump * k;
+    vec3 east = normalize(vec3(nGeo.z, 0.0, -nGeo.x) + vec3(1e-6, 0.0, 0.0));
+    vec3 northT = normalize(cross(nGeo, east));
+    vec3 south = -northT;
+    n = normalize(east * nt.x + south * nt.y + nGeo * max(nt.z, 0.25));
+  }
+
+  // ── 光照 ──
+  // 半兰伯特（wrap）而非硬朗伯：明暗交界柔一点，暗面也留得住地形，
+  // 给 4~6 岁孩子看的地球不能有半颗黑球。
+  vec3 L = normalize(uLight);
+  vec3 V = uViewDir;
+  float wrap = clamp((dot(n, L) + 0.30) / 1.30, 0.0, 1.0);
+  float lam = uAmbient + uDiffuse * wrap;
+  // 背光面给一点冷色补光，免得整块死黑
+  lam += 0.05 * max(dot(nGeo, -L), 0.0);
+
+  float fres = pow(1.0 - clamp(dot(nGeo, V), 0.0, 1.0), uRimPower);
+  vec3 col = albedo * lam;
+  // 深海贴图本身接近全黑，托一点蓝底，免得太平洋看着像个洞
+  col += ocean * lam * vec3(0.020, 0.052, 0.105);
+  col += albedo * fres * vec3(0.20, 0.40, 0.72) * 0.55;   // 大气散射（贴着球面）
+
+  // ── 海洋高光 ──
+  vec3 H = normalize(L + V);
+  float sp = pow(max(dot(n, H), 0.0), uSpecPower) * ocean * uSpec;
+  col += vec3(0.88, 0.94, 1.0) * sp;
+
+  // ── 国家淡色蒙版 ──
+  // palette 用 NEAREST 采样（编号之间插值会出脏色）；这里把调色板归一化到
+  // 单位亮度再乘上去，所以「淡」的程度只由 uCountry 决定，不会顺带压暗地表。
+  if (uHasCountry > 0.5) {
+    vec3 tint = texture2D(uPalette, vec2((id8 + 0.5) / 256.0, 0.5)).rgb;
+    float tl = max(dot(tint, vec3(0.2126, 0.7152, 0.0722)), 0.12);
+    tint /= tl;
+    float amt = uCountry * land;
+    col = mix(col, col * tint, amt);
+    // 国界：索引发生跳变的地方描一道深色细线（贴图里也烘了国界，这里只做加强）
+    col *= mix(1.0, 0.94, amt);
+  }
+
+  // ── 经纬网（解析式，不用导数扩展）──
+  if (uGrid > 0.001) {
+    float latDeg = degrees(asin(clamp(nGeo.y, -1.0, 1.0)));
+    float lonDeg = degrees(atan(nGeo.x, nGeo.z));
+    float w = uGridPx * (180.0 / (PI * max(uR, 1.0)));
+    float m1 = mod(latDeg, 30.0);
+    float d1 = min(m1, 30.0 - m1);
+    float m2 = mod(lonDeg, 30.0);
+    float d2 = min(m2, 30.0 - m2) * max(cos(radians(latDeg)), 0.06);
+    float g = max(1.0 - smoothstep(0.0, max(w, 0.05), d1),
+                  1.0 - smoothstep(0.0, max(w, 0.05), d2));
+    col = mix(col, vec3(0.78, 0.88, 1.0), g * uGrid);
+  }
+
+  // ── 边缘光 + 一点边缘减光，免得看着像贴纸 ──
+  col += vec3(0.30, 0.56, 0.98) * pow(fres, 1.6) * uRim;
+  col *= mix(1.0, 0.90, fres * 0.7);
+
+  // ── 轻微降饱和 + 曝光（贴近真实影像的调子，但别过曝）──
+  float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = mix(col, vec3(luma), uSaturation) * uExposure;
+
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}
+`;
+
+/** 球面网格：索引三角形，索引数 < 65536 所以 Uint16 够用。 */
+function buildSphereMesh(lonSeg, latSeg) {
+  const cols = lonSeg + 1;
+  const rows = latSeg + 1;
+  const verts = new Float32Array(cols * rows * 5);
+  let p = 0;
+  for (let iy = 0; iy < rows; iy++) {
+    const v = iy / latSeg;
+    const la = (90 - v * 180) * DEG;
+    const cl = Math.cos(la);
+    const sl = Math.sin(la);
+    for (let ix = 0; ix < cols; ix++) {
+      const u = ix / lonSeg;
+      const lo = (-180 + u * 360) * DEG;
+      verts[p++] = cl * Math.sin(lo);
+      verts[p++] = sl;
+      verts[p++] = cl * Math.cos(lo);
+      verts[p++] = u;
+      verts[p++] = v;
+    }
+  }
+  // 绕序：开背面剔除后必须只剩朝向相机的那个半球，绕错就会看到「里子」（镜像的地球）。
+  // 这里不靠手推，直接拿赤道上一格按着色器同款投影算一次有向面积，反了就整体翻过来。
+  const px = (i) => verts[i * 5];
+  const py = (i) => verts[i * 5 + 1];
+  const qy = latSeg >> 1;
+  const qx = lonSeg >> 1;
+  const ia = qy * cols + qx;
+  const ic = ia + cols + 1;
+  const ib = ia + 1;
+  const cross =
+    (px(ic) - px(ia)) * (py(ib) - py(ia)) - (py(ic) - py(ia)) * (px(ib) - px(ia));
+  const ccw = cross >= 0;
+
+  const idx = new Uint16Array(lonSeg * latSeg * 6);
+  let k = 0;
+  for (let iy = 0; iy < latSeg; iy++) {
+    for (let ix = 0; ix < lonSeg; ix++) {
+      const a = iy * cols + ix;
+      const b = a + 1;
+      const c = a + cols + 1;
+      const d = a + cols;
+      if (ccw) {
+        idx[k++] = a; idx[k++] = c; idx[k++] = b;
+        idx[k++] = a; idx[k++] = d; idx[k++] = c;
+      } else {
+        idx[k++] = a; idx[k++] = b; idx[k++] = c;
+        idx[k++] = a; idx[k++] = c; idx[k++] = d;
+      }
+    }
+  }
+  return { verts, idx, tris: idx.length / 3, vertCount: cols * rows };
+}
+
+function compileShader(gl, type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(sh);
+    gl.deleteShader(sh);
+    throw new Error(`着色器编译失败：${log || '未知原因'}`);
+  }
+  return sh;
+}
+
+function createProgram(gl, vsSrc, fsSrc) {
+  const vs = compileShader(gl, gl.VERTEX_SHADER, vsSrc);
+  const fs = compileShader(gl, gl.FRAGMENT_SHADER, fsSrc);
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  gl.deleteShader(vs);
+  gl.deleteShader(fs);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(prog);
+    gl.deleteProgram(prog);
+    throw new Error(`着色器链接失败：${log || '未知原因'}`);
+  }
+  return prog;
+}
+
+/** 收集 program 的 uniform / attribute 位置。 */
+function introspect(gl, prog, uniforms, attribs) {
+  const u = {};
+  for (const name of uniforms) u[name] = gl.getUniformLocation(prog, name);
+  const a = {};
+  for (const name of attribs) a[name] = gl.getAttribLocation(prog, name);
+  return { u, a };
+}
+
+const isPow2 = (n) => n > 0 && (n & (n - 1)) === 0;
+
+/**
+ * WebGL 渲染器。一个 Globe 实例只建**一个**上下文，跨多次过场复用
+ * （贴图只上传一次；过场结束时只把 canvas 从 DOM 上摘下来，上下文留着）。
+ */
+class GLRenderer {
+  constructor(doc, opts = {}) {
+    this.ok = false;
+    this.reason = 'no-webgl';
+    this.doc = doc;
+    this.opts = opts;
+    this.gl = null;
+    this.canvas = null;
+    this.w = 0;
+    this.h = 0;
+    this.dpr = 1;
+    this.scale = 1; // 实际用于绘制缓冲的「设备像素 / CSS 像素」倍率（受像素预算限制）
+    this.textures = null; // { albedo, normal, countries, palette, hasNormal, hasCountry }
+    this.info = null;
+    this._frame = null;
+    this._lost = false;
+    this._flat = new Uint8Array(256 * 4); // 纯白兜底贴图（Uint8Array：WebGL1 的 texImage2D 不接受 Float32Array）
+    this._flat.fill(255);
+    this._init();
+  }
+
+  _init() {
+    let canvas = null;
+    let gl = null;
+    try {
+      canvas = this.doc.createElement('canvas');
+      const attrs = {
+        alpha: false,
+        antialias: true,
+        depth: true,
+        stencil: false,
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: false,
+        powerPreference: 'high-performance',
+        failIfMajorPerformanceCaveat: false,
+      };
+      gl =
+        canvas.getContext('webgl', attrs) ||
+        canvas.getContext('experimental-webgl', attrs) ||
+        canvas.getContext('webgl2', attrs);
+    } catch {
+      gl = null;
+    }
+    if (!gl) {
+      this.canvas = canvas;
+      this.reason = 'no-webgl';
+      return;
+    }
+
+    try {
+      this.gl = gl;
+      this.canvas = canvas;
+      canvas.addEventListener('webglcontextlost', (ev) => {
+        try {
+          ev.preventDefault();
+        } catch { /* 忽略 */ }
+        this._lost = true;
+        this.ok = false;
+        this.reason = 'context-lost';
+      });
+
+      const sky = createProgram(gl, VS_QUAD, FS_SKY);
+      const globe = createProgram(gl, VS_GLOBE, FS_GLOBE);
+      this.sky = introspect(gl, sky, [
+        'uRes', 'uCenter', 'uR',
+      ], ['aPos']);
+      this.sky.prog = sky;
+      this.globe = introspect(gl, globe, [
+        'uRes', 'uCenter', 'uR', 'uRight', 'uUp', 'uDir',
+        'uAlbedo', 'uNormalMap', 'uCountryMap', 'uPalette',
+        'uHasNormal', 'uHasCountry', 'uLight', 'uViewDir',
+        'uDiffuse', 'uAmbient', 'uRim', 'uRimPower', 'uSpec', 'uSpecPower',
+        'uBump', 'uOceanBump', 'uCountry', 'uGrid', 'uGridPx',
+        'uExposure', 'uSaturation',
+      ], ['aPos', 'aUv']);
+      this.globe.prog = globe;
+
+      // 全屏四边形
+      this.quad = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+
+      // 球面网格
+      const mesh = buildSphereMesh(this.opts.lonSeg || 192, this.opts.latSeg || 96);
+      this.mesh = mesh;
+      this.vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, mesh.verts, gl.STATIC_DRAW);
+      this.ibo = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ibo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.idx, gl.STATIC_DRAW);
+
+      // 兜底纯白贴图（贴图没到位时也不至于采到未定义数据）
+      this.white = this._makeTexture(this._flat, 256, 1, { nearest: true, mipmap: false });
+
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      this.info = {
+        version: gl.getParameter(gl.VERSION),
+        renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+        vendor: dbg ? gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+        maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+        maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+        tris: mesh.tris,
+        verts: mesh.vertCount,
+      };
+
+      gl.disable(gl.BLEND);
+      gl.clearColor(0.02, 0.043, 0.118, 1);
+      this.ok = true;
+      this.reason = 'ok';
+    } catch (err) {
+      this.ok = false;
+      this.reason = 'webgl-init-failed';
+      this.error = err;
+    }
+  }
+
+  /** 上传一张 256×1 / 图像纹理。 */
+  _makeTexture(source, w, h, { nearest = false, mipmap = true } = {}) {
+    const gl = this.gl;
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    // ★ 关键：不翻转 Y。约定的 v = (90−lat)/180 且贴图第一行是北极，
+    //   正好对上 WebGL 默认的 UNPACK_FLIP_Y_WEBGL = false（首行对应 v=0）。
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    // 注意：6 参数重载只吃 TexImageSource（Image/Canvas/ImageData），
+    // 裸像素数组必须走 9 参数重载，否则 WebGL 直接报 Overload resolution failed。
+    if (ArrayBuffer.isView(source)) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    }
+    const pot = isPow2(w) && isPow2(h);
+    if (nearest) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    } else if (mipmap && pot) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.generateMipmap(gl.TEXTURE_2D);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return tex;
+  }
+
+  /**
+   * 上传一张等距圆柱贴图。默认会把超大图缩到 ≤2048 宽再上传
+   * （3072×1536 的 albedo 直接上传是 18MB 显存 + 明显的首帧卡顿）。
+   */
+  uploadImage(img, { maxW = 2048, maxH = 1024, nearest = false, mipmap = true } = {}) {
+    const gl = this.gl;
+    let src = img;
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    const down = (v, cap) => {
+      let n = 1;
+      while (n * 2 <= v) n *= 2;
+      return Math.min(n, cap);
+    };
+    const tw = Math.min(w, down(w, maxW));
+    const th = Math.min(h, down(h, maxH));
+    if (tw !== w || th !== h) {
+      const c = this.doc.createElement('canvas');
+      c.width = tw;
+      c.height = th;
+      const cx = c.getContext('2d');
+      cx.imageSmoothingEnabled = true;
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(img, 0, 0, tw, th);
+      src = c;
+      w = tw;
+      h = th;
+    }
+    return { tex: this._makeTexture(src, w, h, { nearest, mipmap }), w, h };
+  }
+
+  setTextures(t) {
+    this.textures = t;
+  }
+
+  resize(w, h, dpr) {
+    if (!this.ok) return;
+    // 4K/视网膜屏上 w·h·dpr² 能到 800 万像素，片元着色器会直接压垮中端设备。
+    // 给绘制缓冲设一个像素预算：超了就等比降到预算内，CSS 尺寸不变（浏览器负责放大），
+    // 但至少保留 1 CSS 像素 = 1 设备像素，保证不会糊成马赛克。
+    const budget = 2.2e6;
+    const wanted = w * h * dpr * dpr;
+    let scale = dpr;
+    if (wanted > budget) scale = Math.max(1, dpr * Math.sqrt(budget / wanted));
+    const pw = Math.max(1, Math.round(w * scale));
+    const ph = Math.max(1, Math.round(h * scale));
+    this.w = w;
+    this.h = h;
+    this.dpr = dpr;
+    this.scale = scale;
+    this.canvas.width = pw;
+    this.canvas.height = ph;
+    this.canvas.style.width = `${w}px`;
+    this.canvas.style.height = `${h}px`;
+  }
+
+  /**
+   * 画一帧。frame = { dir, up, right, cx, cy, R, w, h, bump, country }
+   * 返回 'globe'（贴图已就绪，整颗球画出来了）或 'sky'（贴图还在路上，先给星空）。
+   */
+  draw(frame) {
+    if (!this.ok) return false;
+    this._frame = frame;
+    const gl = this.gl;
+    const { w, h } = this;
+    const pw = this.canvas.width;
+    const ph = this.canvas.height;
+    if (!(pw > 0) || !(ph > 0)) return false;
+    gl.viewport(0, 0, pw, ph);
+
+    // ── 1. 星空背景（不透明，顺带免掉一次 clear）──
+    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(false);
+    gl.disable(gl.BLEND);
+    gl.useProgram(this.sky.prog);
+    gl.uniform2f(this.sky.u.uRes, w, h);
+    gl.uniform2f(this.sky.u.uCenter, frame.cx, frame.cy);
+    gl.uniform1f(this.sky.u.uR, frame.R);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+    gl.enableVertexAttribArray(this.sky.a.aPos);
+    gl.vertexAttribPointer(this.sky.a.aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    const tex = this.textures;
+    if (!tex || !tex.albedo) return 'sky';
+
+    // ── 2. 地球 ──
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LESS);
+    gl.depthMask(true);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+    gl.frontFace(gl.CCW);
+
+    const P = this.globe;
+    gl.useProgram(P.prog);
+    gl.uniform2f(P.u.uRes, w, h);
+    gl.uniform2f(P.u.uCenter, frame.cx, frame.cy);
+    gl.uniform1f(P.u.uR, frame.R);
+    gl.uniform3f(P.u.uRight, frame.right[0], frame.right[1], frame.right[2]);
+    gl.uniform3f(P.u.uUp, frame.up[0], frame.up[1], frame.up[2]);
+    gl.uniform3f(P.u.uDir, frame.dir[0], frame.dir[1], frame.dir[2]);
+
+    // 光照：相机系左上偏前 → 换算回世界系（着色器里就是世界向量）
+    const L = frame.light || [0, 0, 1];
+    gl.uniform3f(P.u.uLight, L[0], L[1], L[2]);
+    gl.uniform3f(P.u.uViewDir, frame.dir[0], frame.dir[1], frame.dir[2]);
+
+    gl.uniform1f(P.u.uDiffuse, TUNE.diffuse);
+    gl.uniform1f(P.u.uAmbient, TUNE.ambient);
+    gl.uniform1f(P.u.uRim, TUNE.rim);
+    gl.uniform1f(P.u.uRimPower, TUNE.rimPower);
+    gl.uniform1f(P.u.uSpec, TUNE.spec);
+    gl.uniform1f(P.u.uSpecPower, TUNE.specPower);
+    gl.uniform1f(P.u.uBump, frame.bump == null ? TUNE.bump : frame.bump);
+    gl.uniform1f(P.u.uOceanBump, TUNE.oceanBump);
+    gl.uniform1f(P.u.uCountry, frame.country == null ? TUNE.country : frame.country);
+    gl.uniform1f(P.u.uGrid, TUNE.grid);
+    gl.uniform1f(P.u.uGridPx, TUNE.gridPx);
+    gl.uniform1f(P.u.uExposure, TUNE.exposure);
+    gl.uniform1f(P.u.uSaturation, TUNE.saturation);
+
+    const bind = (loc, texture, unit) => {
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(gl.TEXTURE_2D, texture || this.white);
+      gl.uniform1i(loc, unit);
+    };
+    bind(P.u.uAlbedo, tex.albedo, 0);
+    bind(P.u.uNormalMap, tex.normal, 1);
+    bind(P.u.uCountryMap, tex.countries, 2);
+    bind(P.u.uPalette, tex.palette || this.white, 3);
+    gl.uniform1f(P.u.uHasNormal, tex.normal ? 1 : 0);
+    gl.uniform1f(P.u.uHasCountry, tex.countries ? 1 : 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vbo);
+    gl.enableVertexAttribArray(P.a.aPos);
+    gl.vertexAttribPointer(P.a.aPos, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(P.a.aUv);
+    gl.vertexAttribPointer(P.a.aUv, 2, gl.FLOAT, false, 20, 12);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.ibo);
+    gl.drawElements(gl.TRIANGLES, this.mesh.idx.length, gl.UNSIGNED_SHORT, 0);
+    return 'globe';
+  }
+
+  /** 重画最后一帧并读回一块像素（测试用；不做 preserveDrawingBuffer 也不会读到空）。 */
+  readPixel(x, y, size = 1) {
+    if (!this.ok || !this._frame) return null;
+    try {
+      this.draw(this._frame);
+      const s = Math.max(1, Math.round(size));
+      const half = Math.floor(s / 2);
+      const scale = this.scale || 1;
+      const px = Math.max(0, Math.min(this.canvas.width - s, Math.round(x * scale) - half));
+      const py = Math.max(0, Math.min(this.canvas.height - s, Math.round(y * scale) - half));
+      const buf = new Uint8Array(s * s * 4);
+      this.gl.readPixels(
+        px,
+        this.canvas.height - py - s,
+        s,
+        s,
+        this.gl.RGBA,
+        this.gl.UNSIGNED_BYTE,
+        buf,
+      );
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      for (let i = 0; i < buf.length; i += 4) {
+        r += buf[i];
+        g += buf[i + 1];
+        b += buf[i + 2];
+        a += buf[i + 3];
+      }
+      const n = s * s;
+      return [Math.round(r / n), Math.round(g / n), Math.round(b / n), Math.round(a / n)];
+    } catch {
+      return null;
+    }
+  }
+
+  dispose() {
+    try {
+      const lose = this.gl && this.gl.getExtension('WEBGL_lose_context');
+      if (lose && !this._lost) lose.loseContext();
+    } catch { /* 忽略 */ }
+    this.ok = false;
+  }
+}
+
 // ───────────────────────────────────────────────────────────── 主体
 export class Globe {
   /**
    * @param {Document|Element} root 覆盖层挂载位置（默认 document）
-   * @param {{data?: {LAND?: any[], BORDERS?: any[]}}} [opts]
+   * @param {{data?: {LAND?: any[], BORDERS?: any[]},
+   *          assetBase?: string, assets?: object, forceCanvas2D?: boolean,
+   *          lonSeg?: number, latSeg?: number}} [opts]
    */
-  constructor(root = typeof document !== 'undefined' ? document : null, { data } = {}) {
+  constructor(root = typeof document !== 'undefined' ? document : null, { data, assetBase, assets, forceCanvas2D, lonSeg, latSeg } = {}) {
     this._root = root || (typeof document !== 'undefined' ? document : null);
     this._doc =
       (this._root && (this._root.nodeType === 9 ? this._root : this._root.ownerDocument)) ||
@@ -482,6 +1173,20 @@ export class Globe {
     this._basis = { dir: [0, 0, 1], up: [0, 1, 0], right: [1, 0, 0], forward: [0, 0, -1] };
     this._view = { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, R: 0 };
     this._supported = null;
+
+    // ── 渲染路径状态 ──
+    this._renderer = 'canvas2d';
+    this._reason = 'idle';
+    this._gl = null;
+    this._glTried = false;
+    this._tex = null; // { albedo, normal, countries, palette, hasNormal, hasCountry }
+    this._texPromise = null;
+    this._texState = 'idle'; // idle | loading | ready | failed
+    this._assetBase = typeof assetBase === 'string' && assetBase ? assetBase : readTexturesDir();
+    this._assets = assets && typeof assets === 'object' ? assets : null;
+    this._force2D = forceCanvas2D === true;
+    this._glOpts = { lonSeg, latSeg };
+    this._texUploadMs = 0;
   }
 
   // ── 环境能力 ────────────────────────────────────────────────
@@ -513,6 +1218,39 @@ export class Globe {
 
   get config() {
     return { ...this._cfg };
+  }
+
+  /** 当前实际走的渲染路径：'webgl'（第二代）或 'canvas2d'（第一代降级）。 */
+  get rendererMode() {
+    return this._renderer;
+  }
+
+  /** 为什么走这条路径：idle / ok / no-webgl / texture-error / context-lost / disabled … */
+  get rendererReason() {
+    return this._reason;
+  }
+
+  /** 渲染侧的诊断信息（自动化测试与真机排查用）。 */
+  get rendererInfo() {
+    return {
+      mode: this._renderer,
+      reason: this._reason,
+      textureState: this._texState,
+      assets: this._assetBase,
+      uploadMs: Math.round(this._texUploadMs),
+      webgl: this._gl && this._gl.info ? { ...this._gl.info } : null,
+      buffer: this._gl && this._gl.ok
+        ? { w: this._gl.canvas.width, h: this._gl.canvas.height, scale: Number((this._gl.scale || 1).toFixed(3)) }
+        : null,
+      textures: this._gl && this._gl.textures
+        ? {
+            albedo: !!this._gl.textures.albedo,
+            normal: !!this._gl.textures.normal,
+            countries: !!this._gl.textures.countries,
+            palette: !!this._gl.textures.palette,
+          }
+        : null,
+    };
   }
 
   // ── 调试用只读入口 ──────────────────────────────────────────
@@ -581,6 +1319,52 @@ export class Globe {
     return !!(run && run.el && run.el.parentNode);
   }
 
+  /**
+   * 读屏幕上一点的颜色（自动化测试用，验证贴图方向）。
+   * WebGL 路径下会重画最后一帧再 readPixels；2D 路径直接 getImageData。
+   * @param {number} [size] 取 size×size 的方块取平均，抗锯齿/边缘噪点更稳
+   * @returns {number[]|null} [r,g,b,a]
+   */
+  sampleScreen(x, y, size = 1) {
+    const run = this._run;
+    if (!run || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (this._renderer === 'webgl' && this._gl && this._gl.ok) {
+      return this._gl.readPixel(x, y, size);
+    }
+    try {
+      const canvas = run.baseCanvas;
+      const ctx = run.baseCtx;
+      if (!canvas || !ctx) return null;
+      const dpr = run.view ? run.view.dpr : 1;
+      const s = Math.max(1, Math.round(size));
+      const half = Math.floor(s / 2);
+      const px = Math.max(0, Math.round(x * dpr) - half);
+      const py = Math.max(0, Math.round(y * dpr) - half);
+      const data = ctx.getImageData(px, py, s, s).data;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i];
+        g += data[i + 1];
+        b += data[i + 2];
+        a += data[i + 3];
+        n++;
+      }
+      if (!n) return null;
+      return [Math.round(r / n), Math.round(g / n), Math.round(b / n), Math.round(a / n)];
+    } catch {
+      return null;
+    }
+  }
+
+  /** 屏幕坐标 → 该点的纹理 uv（调试用，配合 sampleScreen 核对贴图方向）。 */
+  geoUv(lat, lon) {
+    return geoUv(lat, lon);
+  }
+
   // ── 主流程 ─────────────────────────────────────────────────
   /**
    * 从 from 转到 to，动画 + 停留结束后 resolve。
@@ -612,6 +1396,10 @@ export class Globe {
       el: null,
       canvas: null,
       ctx: null,
+      baseCanvas: null,
+      baseCtx: null,
+      fxCanvas: null,
+      fxCtx: null,
       onResize: null,
       startTime: 0,
       dur: this._cfg.duration,
@@ -666,6 +1454,11 @@ export class Globe {
   /** 主动销毁：不再需要这个实例时调用（幂等）。 */
   destroy() {
     this.cancel();
+    if (this._gl) {
+      try {
+        this._gl.dispose();
+      } catch { /* 忽略 */ }
+    }
   }
 
   // ── 内部：数据 ─────────────────────────────────────────────
@@ -695,6 +1488,146 @@ export class Globe {
     };
     this._geo = geo;
     return geo;
+  }
+
+  // ── 内部：贴图 ─────────────────────────────────────────────
+  _assetUrl(name, override) {
+    if (override) return override;
+    if (this._assets && typeof this._assets[name] === 'string') return this._assets[name];
+    return `${this._assetBase}${name}`;
+  }
+
+  /** 载入一张图片（带超时，绝不无限挂住）。 */
+  _loadImage(url) {
+    return new Promise((resolve, reject) => {
+      if (!url || typeof url !== 'string') {
+        reject(new Error('空的贴图地址'));
+        return;
+      }
+      const img = new Image();
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`贴图加载超时：${url}`));
+      }, 9000);
+      img.onload = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(img);
+      };
+      img.onerror = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(new Error(`贴图加载失败：${url}`));
+      };
+      try {
+        img.decoding = 'async';
+      } catch { /* 忽略 */ }
+      img.src = url;
+    });
+  }
+
+  /** 走到这里说明 WebGL 上下文可用：异步拉贴图，**不阻塞**动画时间轴。 */
+  _startTextures(run) {
+    // 贴图已经备好（第二次及以后的过场）：直接挂上，不必等一个微任务
+    if (this._tex) {
+      if (this._gl) this._gl.setTextures(this._tex);
+      return;
+    }
+    if (this._texPromise) {
+      // 已经有结果/正在加载：好了就直接挂上，没好就等它
+      this._texPromise.then((t) => {
+        if (this._run !== run || run.done) return;
+        if (t) this._applyTextures(run, t);
+      });
+      return;
+    }
+    this._texState = 'loading';
+    const t0 = now(this._win());
+    const urls = {
+      albedo: this._assetUrl('albedo.jpg', this._assets && this._assets.albedo),
+      normal: this._assetUrl('normal.jpg', this._assets && this._assets.normal),
+      countries: this._assetUrl('countries.png', this._assets && this._assets.countries),
+      palette: this._assetUrl('palette.png', this._assets && this._assets.palette),
+    };
+    const optional = (u) => this._loadImage(u).catch(() => null);
+    this._texPromise = Promise.all([
+      this._loadImage(urls.albedo),
+      optional(urls.normal),
+      optional(urls.countries),
+      optional(urls.palette),
+    ])
+      .then(([albedo, normal, countries, palette]) => {
+        const gl = this._gl;
+        if (!gl || !gl.ok) return null;
+        const tex = {};
+        const up = gl.uploadImage(albedo, { maxW: 2048, maxH: 1024, mipmap: true });
+        tex.albedo = up.tex;
+        tex.albedoSize = [up.w, up.h];
+        if (normal) {
+          const n = gl.uploadImage(normal, { maxW: 2048, maxH: 1024, mipmap: true });
+          tex.normal = n.tex;
+        }
+        if (countries) {
+          // 索引图必须 NEAREST + 不缩不放（插值会造出根本不存在的国家编号）
+          const c = gl.uploadImage(countries, { maxW: 8192, maxH: 8192, nearest: true, mipmap: false });
+          tex.countries = c.tex;
+        }
+        if (palette) {
+          const p = gl.uploadImage(palette, { maxW: 256, maxH: 1, nearest: true, mipmap: false });
+          tex.palette = p.tex;
+        }
+        if (!tex.palette) tex.palette = this._buildFallbackPalette();
+        tex.hasNormal = !!tex.normal;
+        tex.hasCountry = !!tex.countries;
+        this._texUploadMs = now(this._win()) - t0;
+        this._texState = 'ready';
+        return tex;
+      })
+      .catch((err) => {
+        this._texState = 'failed';
+        this._texPromise = null;
+        warn('地球贴图不可用，回退到矢量地球：', err && err.message ? err.message : err);
+        return null;
+      });
+    this._texPromise.then((t) => {
+      if (this._run !== run || run.done) return;
+      this._applyTextures(run, t);
+    });
+  }
+
+  _applyTextures(run, t) {
+    if (!t) {
+      // 贴图挂了 → 当场换成第一代渲染，**绝不留白**
+      this._fallbackToCanvas2D(run, 'texture-error');
+      return;
+    }
+    this._tex = t;
+    if (this._gl) this._gl.setTextures(t);
+  }
+
+  /** 造一张 256×1 的兜底调色板（HSV 黄金角散色相，低饱和）。 */
+  _buildFallbackPalette() {
+    const data = new Uint8Array(256 * 4);
+    for (let i = 0; i < 256; i++) {
+      if (i === 0) {
+        data[i * 4] = 255;
+        data[i * 4 + 1] = 255;
+        data[i * 4 + 2] = 255;
+        data[i * 4 + 3] = 255;
+        continue;
+      }
+      const h = (i * 137.508) % 360;
+      const [r, g, b] = hsvToRgb(h / 360, 0.30, 0.88);
+      data[i * 4] = r;
+      data[i * 4 + 1] = g;
+      data[i * 4 + 2] = b;
+      data[i * 4 + 3] = 255;
+    }
+    return this._gl._makeTexture(data, 256, 1, { nearest: true, mipmap: false });
   }
 
   // ── 内部：启动与收尾 ───────────────────────────────────────
@@ -737,20 +1670,42 @@ export class Globe {
     const el = doc.createElement('div');
     el.className = OVERLAY_CLASS;
     el.setAttribute('aria-hidden', 'true');
-    const canvas = doc.createElement('canvas');
-    canvas.className = `${OVERLAY_CLASS}-canvas`;
-    el.appendChild(canvas);
-    host.appendChild(el);
+    run.el = el;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      try { host.removeChild(el); } catch { /* 忽略 */ }
-      throw new Error('canvas 2d 不可用');
+    // ★ 渲染路径：能上 WebGL 就上，上不了（或强制）就用第一代
+    const gl = this._ensureGL();
+    if (gl && gl.ok) {
+      this._renderer = 'webgl';
+      this._reason = 'ok';
+      // 上下文是跨过场复用的，canvas 节点随本次覆盖层挂上去、结束时摘下来
+      gl.canvas.className = `${OVERLAY_CLASS}-gl`;
+      el.appendChild(gl.canvas);
+      run.baseCanvas = gl.canvas;
+      run.canvas = gl.canvas;
+      this._startTextures(run);
+    } else {
+      this._renderer = 'canvas2d';
+      this._reason = this._glFailReason || 'no-webgl';
+      const base = doc.createElement('canvas');
+      base.className = `${OVERLAY_CLASS}-base`;
+      el.appendChild(base);
+      run.baseCanvas = base;
+      run.canvas = base;
+      run.baseCtx = base.getContext('2d');
+      if (!run.baseCtx) {
+        try { host.removeChild(el); } catch { /* 忽略 */ }
+        throw new Error('canvas 2d 不可用');
+      }
     }
 
-    run.el = el;
-    run.canvas = canvas;
-    run.ctx = ctx;
+    // 前景图层（弧线 / 标记 / 中英标签）：文字必须用 2D 画，两层各自独立
+    const fx = doc.createElement('canvas');
+    fx.className = `${OVERLAY_CLASS}-fx`;
+    el.appendChild(fx);
+    run.fxCanvas = fx;
+    run.fxCtx = fx.getContext('2d');
+
+    host.appendChild(el);
 
     this._layout(run);
 
@@ -765,7 +1720,7 @@ export class Globe {
     win.addEventListener('resize', run.onResize);
 
     run.started = true;
-    run.startTime = typeof win.performance?.now === 'function' ? win.performance.now() : Date.now();
+    run.startTime = now(win);
 
     const raf =
       typeof win.requestAnimationFrame === 'function'
@@ -777,25 +1732,73 @@ export class Globe {
       this._finishRun(run);
       return;
     }
-    run.raf = raf((now) => this._tick(run, now));
+    run.raf = raf((t) => this._tick(run, t));
   }
 
-  _tick(run, now) {
+  /** 懒创建一个跨过场复用的 WebGL 渲染器。 */
+  _ensureGL() {
+    if (this._force2D) {
+      this._glFailReason = 'forced-canvas2d';
+      return null;
+    }
+    if (this._glTried) return this._gl;
+    this._glTried = true;
+    if (!this._doc || typeof this._doc.createElement !== 'function') return null;
+    try {
+      const gl = new GLRenderer(this._doc, this._glOpts);
+      if (!gl.ok) {
+        this._gl = null;
+        this._glFailReason = gl.reason || 'no-webgl';
+        if (gl.error) warn('WebGL 初始化失败，改用矢量地球：', gl.error.message || gl.error);
+        return null;
+      }
+      this._gl = gl;
+      return gl;
+    } catch (err) {
+      warn('WebGL 初始化异常，改用矢量地球：', err && err.message ? err.message : err);
+      this._glFailReason = 'webgl-init-threw';
+      this._gl = null;
+      return null;
+    }
+  }
+
+  /** 中途从 WebGL 掉回第一代：换一块 2D canvas，画面立刻接上，不留白。 */
+  _fallbackToCanvas2D(run, reason) {
+    if (this._renderer === 'canvas2d') return;
+    this._renderer = 'canvas2d';
+    this._reason = reason;
+    const doc = this._doc;
+    if (!doc || !run || run.done || this._run !== run || !run.el) return;
+    try {
+      const base = doc.createElement('canvas');
+      base.className = `${OVERLAY_CLASS}-base`;
+      run.el.insertBefore(base, run.fxCanvas || null);
+      if (run.canvas && run.canvas.parentNode === run.el) run.el.removeChild(run.canvas);
+      run.canvas = base;
+      run.baseCanvas = base;
+      run.baseCtx = base.getContext('2d');
+      this._layout(run);
+    } catch (err) {
+      warn('回退到矢量地球失败：', err && err.message ? err.message : err);
+    }
+  }
+
+  _tick(run, t) {
     run.raf = 0;
     if (run.done || this._run !== run) return;
-    const t = Math.max(0, Number(now) - run.startTime);
+    const dt = Math.max(0, Number(t) - run.startTime);
     run.frames++;
-    if (run.frames === 1) run.zero = Number(now);
-    const span = Number(now) - run.zero;
+    if (run.frames === 1) run.zero = Number(t);
+    const span = Number(t) - run.zero;
     run.fps = span > 250 ? Math.round((run.frames * 1000) / span) : 0;
     try {
-      this._draw(run, t);
+      this._draw(run, dt);
     } catch (err) {
-      warn('地球过场绘制失败：', err);
+      warn('地球过场绘制失败：', err && err.message ? err.message : err);
       this._finishRun(run);
       return;
     }
-    if (t >= run.total) {
+    if (dt >= run.total) {
       this._finishRun(run);
       return;
     }
@@ -828,6 +1831,10 @@ export class Globe {
     run.el = null;
     run.canvas = null;
     run.ctx = null;
+    run.baseCanvas = null;
+    run.baseCtx = null;
+    run.fxCanvas = null;
+    run.fxCtx = null;
     run.bg = null;
     run.geo = null;
     run.arcVec = null;
@@ -845,45 +1852,61 @@ export class Globe {
   _layout(run) {
     const win = this._win();
     const doc = this._doc;
-    const canvas = run.canvas;
-    if (!win || !doc || !canvas) return;
+    if (!win || !doc) return;
 
     const de = doc.documentElement || {};
     const w = Math.max(1, Math.round(win.innerWidth || de.clientWidth || 1280));
     const h = Math.max(1, Math.round(win.innerHeight || de.clientHeight || 720));
     const dpr = clamp(Number(win.devicePixelRatio) || 1, 1, 2);
-
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
+    const pw = Math.round(w * dpr);
+    const ph = Math.round(h * dpr);
 
     const view = { w, h, dpr, cx: w / 2, cy: h / 2, R: Math.min(w * 0.44, h * 0.34) };
     run.view = view;
     this._view = view;
 
-    this._prerender(run);
+    const sizeCanvas = (c) => {
+      if (!c) return;
+      c.width = pw;
+      c.height = ph;
+      c.style.width = `${w}px`;
+      c.style.height = `${h}px`;
+    };
+
+    if (this._renderer === 'webgl' && this._gl && this._gl.ok) {
+      this._gl.resize(w, h, dpr);
+      run.baseCanvas = this._gl.canvas;
+      run.canvas = this._gl.canvas;
+    } else {
+      sizeCanvas(run.baseCanvas);
+    }
+    sizeCanvas(run.fxCanvas);
+
+    // 第一代渲染需要一张预渲染底图（夜空 + 星星 + 海洋）。
+    // WebGL 路径不需要它，只有真的回退时才构建，省掉一次全屏预渲染。
+    if (this._renderer === 'canvas2d') this._prerender(run);
   }
 
   _prerender(run) {
     const doc = this._doc;
     const view = run.view;
+    if (!doc || !view) return;
+    // 尺寸变了必须重画：预渲染底图里的海面圆盘是按 R 画的，拉伸复用会错位
+    if (run.bg && (run.bgW !== view.w || run.bgH !== view.h || run.bgDpr !== view.dpr)) {
+      run.bg = null;
+    }
+    if (run.bg) return;
     const pw = Math.max(1, Math.round(view.w * view.dpr));
     const ph = Math.max(1, Math.round(view.h * view.dpr));
     const cx = view.cx;
     const cy = view.cy;
     const R = view.R;
 
-    const mk = () => {
-      const c = doc.createElement('canvas');
-      c.width = pw;
-      c.height = ph;
-      return c;
-    };
-
-    // ── 底色（夜空 + 星星 + 海洋 + 边缘明暗），每帧一次 drawImage ──
-    const base = mk();
+    const base = doc.createElement('canvas');
+    base.width = pw;
+    base.height = ph;
     const bx = base.getContext('2d');
+    if (!bx) return;
     bx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
 
     const sky = bx.createLinearGradient(0, 0, 0, view.h);
@@ -962,19 +1985,15 @@ export class Globe {
     bx.restore();
 
     run.bg = base;
-
-    // 覆盖层宽高（第一帧之前就要正确，否则会闪一下左上角）
-    if (run.canvas) {
-      run.canvas.style.width = `${view.w}px`;
-      run.canvas.style.height = `${view.h}px`;
-    }
+    run.bgW = view.w;
+    run.bgH = view.h;
+    run.bgDpr = view.dpr;
   }
 
   // ── 内部：逐帧绘制 ─────────────────────────────────────────
   _draw(run, t) {
-    const ctx = run.ctx;
     const view = run.view;
-    if (!ctx || !view) return;
+    if (!view) return;
 
     const fade = run.fade > 0 ? run.fade : 1;
     const fadeIn = clamp(t / fade, 0, 1);
@@ -992,22 +2011,87 @@ export class Globe {
     const holding = t > run.dur;
     const holdP = run.hold > 0 ? clamp((t - run.dur) / run.hold, 0, 1) : 1;
     run.pulse = holding ? 0.5 + 0.5 * Math.sin(holdP * Math.PI * 3) : 0;
+    run.easeS = s;
+    run.holding = holding;
 
+    // 淡入淡出交给 CSS opacity：两层 canvas 一起淡，比每层各自 globalAlpha 更干净，
+    // 也顺手修掉了旧实现里标签被叠乘三次 alpha 的问题。
+    if (run.el) {
+      const a = alpha >= 0.999 ? '1' : alpha <= 0.001 ? '0' : alpha.toFixed(3);
+      if (run.el.style.opacity !== a) run.el.style.opacity = a;
+    }
+
+    if (this._renderer === 'webgl' && this._gl && this._gl.ok) {
+      // 贴图还在路上时只画星空，标记/弧线也先不画（免得浮在空星空上）
+      if (this._drawBaseGL(run) === 'globe') this._drawFx(run);
+      return;
+    }
+    // WebGL 上下文丢了（手机后台切回、驱动重置）：当场换成矢量地球，别留一块死画布
+    if (this._renderer === 'webgl') {
+      this._fallbackToCanvas2D(run, (this._gl && this._gl.reason) || 'context-lost');
+    }
+    if (this._drawBase2D(run)) this._drawFx(run);
+  }
+
+  /** 第二代：WebGL。贴图没到位时只画星空（别让 Promise 挂住，也别留白）。 */
+  _drawBaseGL(run) {
+    const gl = this._gl;
+    const view = run.view;
+    const b = this._basis;
+    // 光照方向：相机系左上偏前 → 世界系（相机系里 right=东、up=北、dir=朝相机）
+    const lc = TUNE.lightCam;
+    const light = [
+      lc[0] * b.right[0] + lc[1] * b.up[0] + lc[2] * b.dir[0],
+      lc[0] * b.right[1] + lc[1] * b.up[1] + lc[2] * b.dir[1],
+      lc[0] * b.right[2] + lc[1] * b.up[2] + lc[2] * b.dir[2],
+    ];
+    const frame = {
+      dir: b.dir,
+      up: b.up,
+      right: b.right,
+      cx: view.cx,
+      cy: view.cy,
+      R: view.R,
+      light,
+      // 小屏（手机）上球很小，国家索引图用 NEAREST 会闪，蒙版相应收一点
+      country: TUNE.country * clamp(view.R / 420, 0.45, 1),
+    };
+    try {
+      return gl.draw(frame);
+    } catch (err) {
+      warn('WebGL 绘制失败，回退到矢量地球：', err && err.message ? err.message : err);
+      this._fallbackToCanvas2D(run, 'draw-error');
+      return false;
+    }
+  }
+
+  /** 第一代：Canvas 2D 矢量地球（夜空 + 海洋 + 大陆 + 国界 + 经纬网）。 */
+  _drawBase2D(run) {
+    const ctx = run.baseCtx;
+    const view = run.view;
+    if (!ctx || !view) return false;
+    if (!run.bg) this._prerender(run);
+    if (!run.bg) return false;
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    // 半透明帧要先擦干净，否则会和上一帧叠影
-    if (alpha < 0.999) ctx.clearRect(0, 0, view.w, view.h);
-    ctx.globalAlpha = alpha;
-
+    ctx.globalAlpha = 1;
     ctx.drawImage(run.bg, 0, 0, view.w, view.h);
-
     this._drawGraticule(ctx, run);
     this._drawLand(ctx, run);
     this._drawBorders(ctx, run);
-    this._drawArc(ctx, run, s);
-    this._drawSilhouette(ctx, run);
-    this._drawMarkers(ctx, run, animP, holding, alpha);
+    return true;
+  }
 
+  /** 前景图层：大圆弧 + 起点/终点标记 + 中英标签（两条渲染路径共用）。 */
+  _drawFx(run) {
+    const ctx = run.fxCtx;
+    const view = run.view;
+    if (!ctx || !view) return;
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    ctx.clearRect(0, 0, view.w, view.h);
     ctx.globalAlpha = 1;
+    this._drawSilhouette(ctx, run);
+    this._drawArc(ctx, run, run.easeS == null ? 1 : run.easeS);
+    this._drawMarkers(ctx, run, run.progress, run.holding === true, 1);
   }
 
   _drawGraticule(ctx, run) {
@@ -1105,9 +2189,6 @@ export class Globe {
   }
 
   _drawMarkers(ctx, run, animP, holding, alpha) {
-    const b = this._basis;
-    const view = run.view;
-
     // 起点：动画前半段淡出
     const originA = clamp(1 - (animP - 0.04) / 0.46, 0, 1);
     // 终点：接近时淡入，到位后脉冲高亮
@@ -1264,6 +2345,11 @@ function prefersReducedMotion(win) {
   }
 }
 
+function now(win) {
+  if (win && win.performance && typeof win.performance.now === 'function') return win.performance.now();
+  return Date.now();
+}
+
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function next() {
@@ -1275,6 +2361,26 @@ function mulberry32(seed) {
   };
 }
 
+function hsvToRgb(h, s, v) {
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  let r;
+  let g;
+  let b;
+  switch (i % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    default: r = v; g = p; b = q; break;
+  }
+  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+}
+
 function injectStyle(doc) {
   if (!doc || !doc.head) return;
   if (doc.getElementById(STYLE_ID)) return;
@@ -1282,7 +2388,10 @@ function injectStyle(doc) {
   style.id = STYLE_ID;
   style.textContent = `
 .${OVERLAY_CLASS}{position:fixed;inset:0;z-index:80;pointer-events:none;overflow:hidden;background:transparent;}
-.${OVERLAY_CLASS}-canvas{display:block;width:100%;height:100%;}
+.${OVERLAY_CLASS} canvas{position:absolute;left:0;top:0;display:block;width:100%;height:100%;}
+.${OVERLAY_CLASS}-base{z-index:0;}
+.${OVERLAY_CLASS}-gl{z-index:1;}
+.${OVERLAY_CLASS}-fx{z-index:2;}
 `;
   doc.head.appendChild(style);
 }

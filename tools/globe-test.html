@@ -29,6 +29,8 @@ const FALLBACK_CITIES = {
   sydney: { id: 'sydney', zh: '悉尼', en: 'Sydney', lat: -33.8688, lon: 151.2093 },
   reykjavik: { id: 'reykjavik', zh: '雷克雅未克', en: 'Reykjavik', lat: 64.1466, lon: -21.9426 },
   singapore: { id: 'singapore', zh: '新加坡', en: 'Singapore', lat: 1.3521, lon: 103.8198 },
+  // 赤道本初子午线：合成贴图的四象限探针用它当终点（相机 settle 在 (0,0)）
+  greenwich: { id: 'greenwich', zh: '本初子午线', en: 'Null Island', lat: 0, lon: 0 },
 };
 
 let CITIES = { ...FALLBACK_CITIES };
@@ -44,7 +46,10 @@ try {
   console.warn('cities.json 读取失败，用内置城市列表', err);
 }
 
-const globe = new Globe(document);
+// 测试页在 tools/ 子目录里，而生产页面在仓库根目录。
+// 这里显式给绝对 assetBase，既不让子目录影响路径，也仍然走「assetBase 覆盖」这条正常分支。
+const ASSET_BASE = new URL('../assets/globe/', location.href).href;
+const globe = new Globe(document, { assetBase: ASSET_BASE });
 /** globe.js 运行时注入的 <style> id（写成变量，避免被 lint-site 当成 index.html 的必需节点）。 */
 const STYLE_ID = 'wr-globe-style';
 window.__globe = globe;
@@ -64,6 +69,7 @@ window.__cityIds = () => Object.keys(CITIES);
 let sampling = false;
 let samples = [];
 let skipped = 0;
+let samplingGlobe = globe;
 
 function eastOf(dir) {
   const lon = Math.atan2(dir[0], dir[2]);
@@ -77,17 +83,18 @@ function northTangentOf(dir) {
 const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 function takeSample() {
+  const g = samplingGlobe;
   // 视口还没建立（数据还在 import / 首帧未跑）时跳过，避免把「没有相机」当成一帧
-  const view = globe.viewport;
+  const view = g.viewport;
   if (!(view.R > 0)) {
     skipped++;
     return;
   }
-  const b = globe.cameraBasis();
+  const b = g.cameraBasis();
   const east = eastOf(b.dir);
   const nt = northTangentOf(b.dir);
-  const n = globe.worldToScreen(90, 0);
-  const s = globe.worldToScreen(-90, 0);
+  const n = g.worldToScreen(90, 0);
+  const s = g.worldToScreen(-90, 0);
   samples.push({
     t: performance.now(),
     upEast: Math.abs(dot3(b.up, east)),
@@ -106,8 +113,9 @@ function takeSample() {
     southY: s ? s.y : null,
     // 屏幕 y 向下 ⇒ 北极应比南极小
     poleGap: n && s ? s.y - n.y : null,
-    progress: globe.state.progress,
-    running: globe.state.running,
+    progress: g.state.progress,
+    running: g.state.running,
+    mode: g.rendererMode,
   });
 }
 
@@ -128,6 +136,7 @@ function summarize() {
   let minPoleGap = Infinity;
   let maxPoleGap = -Infinity;
   let nullPoles = 0;
+  const modes = new Set();
   for (const s of samples) {
     maxUpEast = Math.max(maxUpEast, s.upEast);
     maxUpDir = Math.max(maxUpDir, s.upDir);
@@ -136,6 +145,7 @@ function summarize() {
     maxRightDir = Math.max(maxRightDir, s.rightDir);
     maxRightUp = Math.max(maxRightUp, s.rightUp);
     maxUpVsNorth = Math.max(maxUpVsNorth, s.upVsNorth);
+    if (s.mode) modes.add(s.mode);
     if (s.poleGap == null) nullPoles++;
     else {
       minPoleGap = Math.min(minPoleGap, s.poleGap);
@@ -158,6 +168,7 @@ function summarize() {
     minPoleGap,
     maxPoleGap,
     nullPoles,
+    modes: [...modes],
     firstSample: samples[0] || null,
     lastSample: samples[samples.length - 1] || null,
   };
@@ -174,23 +185,29 @@ window.__runTransition = (fromId, toId) => {
 };
 
 /** 同上，但直接给城市对象（用来压极地 / 对跖等边界）。 */
-window.__runPair = (from, to) => {
+window.__runPair = (from, to) => window.__runPairOn(globe, from, to);
+
+/** 在指定 Globe 实例上跑一次并逐帧采样（降级路径 / 合成贴图实例用）。 */
+window.__runPairOn = (g, from, to) => {
   samples = [];
   skipped = 0;
+  samplingGlobe = g;
   sampling = true;
   requestAnimationFrame(rafSample);
   const t0 = performance.now();
-  return globe.showTransition(from, to).then(() => {
+  return g.showTransition(from, to).then(() => {
     sampling = false;
     const summary = summarize();
     const r = {
       ms: Math.round(performance.now() - t0),
-      runningAfter: globe.state.running,
-      attachedAfter: globe.attached,
+      runningAfter: g.state.running,
+      attachedAfter: g.attached,
       overlayInDom: !!document.querySelector('.wr-globe-overlay'),
-      progressAfter: globe.state.progress,
-      stateFrames: globe.state.frames,
-      stateFps: globe.state.fps,
+      progressAfter: g.state.progress,
+      stateFrames: g.state.frames,
+      stateFps: g.state.fps,
+      rendererMode: g.rendererMode,
+      rendererReason: g.rendererReason,
       summary,
     };
     window.__result = r;
@@ -204,6 +221,11 @@ window.__overlayInfo = () => {
   if (!el) return null;
   const cs = getComputedStyle(el);
   const canvas = el.querySelector('canvas');
+  const canvases = [...el.querySelectorAll('canvas')].map((c) => ({
+    cls: c.className,
+    w: c.width,
+    h: c.height,
+  }));
   return {
     className: el.className,
     position: cs.position,
@@ -213,6 +235,9 @@ window.__overlayInfo = () => {
     ariaHidden: el.getAttribute('aria-hidden'),
     canvasWidth: canvas ? canvas.width : 0,
     canvasHeight: canvas ? canvas.height : 0,
+    canvasClass: canvas ? canvas.className : '',
+    canvases,
+    opacity: cs.opacity,
     styleTagCount: document.getElementById(STYLE_ID) ? 1 : 0,
     running: globe.state.running,
   };
@@ -329,11 +354,306 @@ window.__debug = () => ({
   hasGlobeConst: !!constants.GLOBE,
   globeConst: constants.GLOBE || null,
   state: globe.state,
+  rendererMode: globe.rendererMode,
+  rendererReason: globe.rendererReason,
+  rendererInfo: globe.rendererInfo,
   errors: window.__errors.slice(),
   hasData: !!globe._data,
   landRings: globe._data ? globe._data.LAND.length : 0,
   borderRings: globe._data ? globe._data.BORDERS.length : 0,
 });
+
+// ══════════════════════════════════════════════════════════════
+// 贴图方向自测装置
+// ══════════════════════════════════════════════════════════════
+// 「正北朝上」的相机判据抓不到 v 方向画反（南极在上时它依然全绿），
+// 所以这里额外验两条：
+//   A. 源贴图侧：把北京/东京投到 uv 上采样 countries.png，编号必须是 China / Japan；
+//   B. 渲染侧：用**合成四象限贴图**（北半红、南半蓝…）跑一次过场，
+//      再读屏幕上四个已知经纬度的像素，色相必须落在对应的象限里。
+// B 完全不依赖 assets/globe，任何时候都能跑，且 u/v 方向一起验。
+
+const TEX_URL = (name) => `../assets/globe/${name}`;
+const tex = { albedo: null, normal: null, countries: null, palette: null };
+let countriesJson = null;
+let assetsReady = false;
+
+async function loadSrcTexture(name) {
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = () => rej(new Error(`贴图读取失败：${name}`));
+    img.src = TEX_URL(name);
+  });
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const cx = c.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(img, 0, 0);
+  return { canvas: c, ctx: cx, w: c.width, h: c.height };
+}
+
+window.__loadAssets = async () => {
+  const out = { ok: false, error: null, files: [] };
+  try {
+    for (const name of ['albedo.jpg', 'normal.jpg', 'countries.png', 'palette.png']) {
+      const key = name.split('.')[0];
+      tex[key] = await loadSrcTexture(name);
+      out.files.push(`${name} ${tex[key].w}×${tex[key].h}`);
+    }
+    const r = await fetch('../assets/globe/countries.json');
+    if (r.ok) countriesJson = await r.json();
+    assetsReady = true;
+    out.ok = true;
+  } catch (err) {
+    out.error = String(err && err.message ? err.message : err);
+  }
+  return out;
+};
+
+/** 贴图上的像素（uv 约定：u=(lon+180)/360 西→东，v=(90−lat)/180 北→南）。 */
+function texelAt(lat, lon, key) {
+  const t = tex[key];
+  if (!t) return null;
+  const u = (lon + 180) / 360;
+  const v = (90 - lat) / 180;
+  const x = Math.min(t.w - 1, Math.max(0, Math.floor(u * t.w)));
+  const y = Math.min(t.h - 1, Math.max(0, Math.floor(v * t.h)));
+  const d = t.ctx.getImageData(x, y, 1, 1).data;
+  return [d[0], d[1], d[2], d[3]];
+}
+window.__texelAt = (lat, lon, key = 'albedo') => texelAt(lat, lon, key);
+window.__countryIdAt = (lat, lon) => {
+  const p = texelAt(lat, lon, 'countries');
+  return p ? p[0] : null;
+};
+window.__countryNameOf = (id) => {
+  if (!countriesJson || !countriesJson.names) return null;
+  return countriesJson.names[String(id)] || null;
+};
+window.__paletteAt = (id) => {
+  const t = tex.palette;
+  if (!t) return null;
+  const d = t.ctx.getImageData(Math.min(255, Math.max(0, id)), 0, 1, 1).data;
+  return [d[0], d[1], d[2]];
+};
+window.__assetsReady = () => assetsReady;
+
+const chroma = (rgb) => {
+  const s = rgb[0] + rgb[1] + rgb[2] + 1e-6;
+  return [rgb[0] / s, rgb[1] / s, rgb[2] / s];
+};
+const chromaDist = (a, b) => {
+  const x = chroma(a);
+  const y = chroma(b);
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+};
+window.__chromaDist = chromaDist;
+
+/**
+ * 真实贴图的渲染核对：跑到目标城市静止后，逐点读屏幕像素 + 读源贴图，
+ * 比较「同点 texel」与「南北镜像 texel」哪个更接近屏幕颜色。
+ */
+window.__probeTextures = async (fromId = 'beijing', toId = 'tokyo', atMs = 5400) => {
+  const from = CITIES[fromId];
+  const to = CITIES[toId];
+  const points = [
+    ['Tibet', 32, 88],
+    ['Arabia', 24, 45],
+    ['Siberia', 62, 95],
+    ['Sichuan', 30, 103],
+    ['Australia', -25, 133],
+    ['Indian Ocean', -20, 80],
+  ];
+  const p = window.__runPair(from, to);
+  await new Promise((r) => setTimeout(r, atMs));
+  const shots = points.map(([name, lat, lon]) => {
+    const sc = globe.worldToScreen(lat, lon);
+    const px = sc && sc.visible ? globe.sampleScreen(sc.x, sc.y, 5) : null;
+    const here = texelAt(lat, lon, 'albedo');
+    const flip = texelAt(-lat, lon, 'albedo');
+    return {
+      name,
+      lat,
+      lon,
+      visible: !!(sc && sc.visible),
+      screen: sc ? { x: Math.round(sc.x), y: Math.round(sc.y) } : null,
+      rendered: px,
+      texel: here,
+      flipTexel: flip,
+      dHere: px && here ? chromaDist(px, here) : null,
+      dFlip: px && flip ? chromaDist(px, flip) : null,
+      countryId: (() => {
+        const c = texelAt(lat, lon, 'countries');
+        return c ? c[0] : null;
+      })(),
+    };
+  });
+  const info = {
+    rendererMode: globe.rendererMode,
+    rendererReason: globe.rendererReason,
+    rendererInfo: globe.rendererInfo,
+  };
+  await p;
+  return { shots, info };
+};
+
+/** 合成四象限贴图：用来一次性验 u/v 两个方向（不依赖 assets/globe）。 */
+function makeQuadrantAlbedo() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 128;
+  const x = c.getContext('2d');
+  x.imageSmoothingEnabled = false;
+  x.fillStyle = '#d42a20'; // NW（北半球 + 西经）红
+  x.fillRect(0, 0, 128, 64);
+  x.fillStyle = '#1fbf4a'; // NE 绿
+  x.fillRect(128, 0, 128, 64);
+  x.fillStyle = '#2044d8'; // SW 蓝
+  x.fillRect(0, 64, 128, 64);
+  x.fillStyle = '#e8c81e'; // SE 黄
+  x.fillRect(128, 64, 128, 64);
+  return c.toDataURL('image/png');
+}
+function makeFlatNormal() {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 32;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgb(128,128,255)';
+  x.fillRect(0, 0, 64, 32);
+  return c.toDataURL('image/png');
+}
+function makeAllLandCountries() {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 32;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgb(1,1,1)'; // 编号 1 = 陆地（顺带把海洋高光关掉）
+  x.fillRect(0, 0, 64, 32);
+  return c.toDataURL('image/png');
+}
+function makeWhitePalette() {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 1;
+  const x = c.getContext('2d');
+  x.fillStyle = '#ffffff';
+  x.fillRect(0, 0, 256, 1);
+  return c.toDataURL('image/png');
+}
+
+window.__extraGlobes = [];
+
+/** 造一个独立的 Globe 实例（可以强制降级 / 换贴图 / 换数据）。 */
+window.__makeGlobe = (opts = {}) => {
+  const g = new Globe(document, {
+    data: opts.data || { LAND: [], BORDERS: [] },
+    forceCanvas2D: opts.forceCanvas2D === true,
+    assetBase: opts.assetBase || ASSET_BASE,
+    assets: opts.assets,
+  });
+  window.__extraGlobes.push(g);
+  return g;
+};
+
+window.__assetBase = () => ASSET_BASE;
+
+/** 默认构造（不传 assetBase）时的贴图目录 —— 必须等于 constants 里的 GLOBE_TEXTURES_DIR。 */
+window.__defaultAssetBase = () => new Globe(document, { data: { LAND: [], BORDERS: [] } }).rendererInfo.assets;
+window.__globeTexturesDirConst = () =>
+  typeof constants.GLOBE_TEXTURES_DIR === 'string' ? constants.GLOBE_TEXTURES_DIR : null;
+
+/**
+ * 用合成贴图跑一次过场并读回四个象限的像素。
+ * 终点固定在本初子午线与赤道交点，相机静止时 up=正北、right=正东，
+ * 于是四个探针点落在屏幕的左上/右上/左下/右下，色相应当与贴图象限一一对应。
+ */
+window.__quadrantProbe = async (fromId = 'reykjavik', toId = 'greenwich') => {
+  const g = window.__makeGlobe({
+    assets: {
+      albedo: makeQuadrantAlbedo(),
+      normal: makeFlatNormal(),
+      countries: makeAllLandCountries(),
+      palette: makeWhitePalette(),
+    },
+  });
+  const from = CITIES[fromId];
+  const to = CITIES[toId];
+  // 相机 settle 在 (0,0)：这些点都在可见半球内且不落在 30° 网格线上
+  const probes = [
+    { name: 'NW', lat: 25, lon: -45, want: [212, 42, 32] },
+    { name: 'NE', lat: 25, lon: 45, want: [31, 191, 74] },
+    { name: 'SW', lat: -25, lon: -45, want: [32, 68, 216] },
+    { name: 'SE', lat: -25, lon: 45, want: [232, 200, 30] },
+  ];
+  const p = window.__runPairOn(g, from, to);
+  await new Promise((r) => setTimeout(r, 5400)); // 5.0s 动画 + 静止段
+  const view = g.viewport;
+  const shots = probes.map((q) => {
+    const sc = g.worldToScreen(q.lat, q.lon);
+    const px = sc && sc.visible ? g.sampleScreen(sc.x, sc.y, 7) : null;
+    const dists = probes.map((o) => ({ name: o.name, d: px ? chromaDist(px, o.want) : null }));
+    let best = null;
+    for (const d of dists) if (d.d !== null && (best === null || d.d < best.d)) best = d;
+    return {
+      name: q.name,
+      lat: q.lat,
+      lon: q.lon,
+      want: q.want,
+      visible: !!(sc && sc.visible),
+      screen: sc ? { x: Math.round(sc.x), y: Math.round(sc.y) } : null,
+      quadrantOfScreen: sc
+        ? (sc.y < view.cy ? '上' : '下') + (sc.x < view.cx ? '左' : '右')
+        : null,
+      rendered: px,
+      dWant: px ? chromaDist(px, q.want) : null,
+      best,
+      dists,
+    };
+  });
+  const info = { rendererMode: g.rendererMode, rendererReason: g.rendererReason };
+  await p;
+  return { shots, info, view };
+};
+
+// ── 强制 WebGL 不可用（模拟老设备 / 驱动黑名单）────────────────
+let savedGetContext = null;
+window.__forceNoWebGL = (on = true) => {
+  const proto = HTMLCanvasElement.prototype;
+  if (on) {
+    if (savedGetContext) return true;
+    savedGetContext = proto.getContext;
+    proto.getContext = function patched(type, ...rest) {
+      if (String(type).indexOf('webgl') === 0 || type === 'experimental-webgl') return null;
+      return savedGetContext.call(this, type, ...rest);
+    };
+    return true;
+  }
+  if (savedGetContext) {
+    proto.getContext = savedGetContext;
+    savedGetContext = null;
+  }
+  return false;
+};
+
+/** 裸 WebGL 能力探测（不经过 globe.js）。 */
+window.__webglAvailable = () => {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+    if (!gl) return { ok: false };
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    return {
+      ok: true,
+      version: gl.getParameter(gl.VERSION),
+      renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+    };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+};
 
 window.__ready = true;
 </script>

@@ -21,6 +21,11 @@ tools/last-dom.html
 tools/shots/
 tools/_probe/
 
+# 素材核对用的预览图（由 tools/preview-*.py 生成，随时可重跑，不入库）
+tools/globe-preview.png
+tools/globe-textures-preview.png
+tools/globe-border-crops.png
+
 # 编辑器
 .vscode/
 .idea/
