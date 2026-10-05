@@ -5,6 +5,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# tools/gen-globe-data.py 从 CDN 拉下来的 Natural Earth 原始 TopoJSON（约 160KB）
+# 只是本地生成缓存，需要时脚本会自己重新下载，不入库
+.cache/
+
 # 本地试听用的无损副本（体积大，不部署；网页用 mp3）
 assets/audio/music/*.wav
 assets/audio/music/preview-*
