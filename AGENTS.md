@@ -373,10 +373,20 @@ python tools/inspect-audio.py              # 音频体检：时长/峰值/静音
 
 # 真实浏览器端到端（本机装了 Chrome 即可，不需要 playwright；用 CDP 直连）
 python tools/serve.py -p 8099 &
-node tools/e2e.mjs index.html --keep-shots   # 渲染/字号/零蒙版/加载页/预下载/暂停/自动推进/双视口
-node tools/e2e.mjs large.html                # 大屏版
+node tools/e2e.mjs index.html --keep-shots   # 渲染/字号/零蒙版/加载页/预下载/暂停/自动推进/地球过场/双视口（52 项）
+node tools/e2e.mjs large.html                # 大屏版（30 项）
 node tools/e2e-offline.mjs                   # 断网后仍能打开并继续播报
+node tools/e2e-unlock.mjs 8099               # 自动播放被拦截时的三条解锁路径（13 项）
+node tools/globe-test.mjs                    # 3D 地球专项：正北朝上/缩放/降级/中国红（114 项）
 ```
+
+> ⚠ **`tools/e2e.mjs` 跑不到「解锁」路径**：它启动 Chrome 时带了
+> `--autoplay-policy=no-user-gesture-required`（无头环境没有真实手势）。
+> 所以解锁相关必须用 `tools/e2e-unlock.mjs` —— 那个 bug 就是这样漏过 52 项断言的。
+>
+> 排查「加载页卡住 / 没声音」时先跑 `node tools/diagnose-boot.mjs 8099`（不做断言，
+> 把 boot 全过程的 console、异常、失败请求、`__wrDiag`/`__wrTimings` 原样打出来）。
+> 想边看边查就用你可视的浏览器：`node tools/drive-local.mjs 8099`（连到你手动开的 Chrome 窗口逐步操作）。
 
 ### 🎧 音频效果**不纳入自动验收**，由老板真人试听
 
