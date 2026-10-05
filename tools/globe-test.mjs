@@ -208,10 +208,14 @@ try {
     `陆地 ${dbg0.landRings} 块 / 国界 ${dbg0.borderRings} 段`,
   );
   check(
+    // 注意：这里期望的是 constants.js 里 GLOBE 的**当前值**。
+    // 调 GLOBE.fadeMs 这类参数时，这条断言要一起改——它的作用是确保
+    // 「constants 里的配置」与「globe.js 内置兜底」没有被改歪成两套数字。
     'GLOBE 配置来自 constants.js（取不到时用内置兜底，数值一致）',
-    dbg0.config.duration === 5000
+    dbg0.hasGlobeConst === true
+      && dbg0.config.duration === 5000
       && dbg0.config.holdMs === 1200
-      && dbg0.config.fadeMs === 400
+      && dbg0.config.fadeMs === 280
       && dbg0.config.minLat === -85
       && dbg0.config.maxLat === 85
       && dbg0.config.enabled === true,

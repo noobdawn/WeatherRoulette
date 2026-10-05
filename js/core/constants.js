@@ -55,8 +55,10 @@ export const GLOBE = {
   duration: 5000,
   /** 转到位之后停留多久再交回卡片（让孩子看清目标城市） */
   holdMs: 1200,
-  /** 覆盖层淡入/淡出时长（毫秒） */
-  fadeMs: 400,
+  /** 覆盖层淡入/淡出时长（毫秒）。
+   *  400ms 时地球半透明叠在城市照片上的时间偏长、看着发糊，收到 280ms 更利落；
+   *  淡入淡出与动画时间轴重叠，所以不增加过场总时长。 */
+  fadeMs: 280,
   /** 相机纬度夹紧：避免在极地附近相机基退化（up 与 dir 共线） */
   minLat: -85,
   maxLat: 85,
@@ -64,6 +66,15 @@ export const GLOBE = {
 
 /** 城市壁纸图源清单（由 assets/images/manifest.json 提供） */
 export const IMAGES_DIR = 'assets/images';
+
+/**
+ * WebGL 地球的贴图目录（由 tools/gen-globe-textures.py 生成）。
+ *   albedo.jpg    真实卫星影像（国界已烘进贴图）
+ *   normal.jpg    从地形起伏导出的法线贴图，供实时山体光影
+ *   countries.png 8bit 国家编号图，供淡色蒙版
+ *   palette.png   256×1 调色板，把编号映射成低饱和颜色
+ */
+export const GLOBE_TEXTURES_DIR = 'assets/globe';
 
 /** 天气数据接口：Open-Meteo，免 API Key */
 export const WEATHER_API = 'https://api.open-meteo.com/v1/forecast';

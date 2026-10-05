@@ -7,7 +7,7 @@
  *
  * 修改任何资源后请把 CACHE_VERSION 加一，否则老用户会一直看到旧缓存。
  */
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CORE_CACHE = `wr-core-${CACHE_VERSION}`;
 const AUDIO_CACHE = `wr-audio-${CACHE_VERSION}`;
 const IMAGE_CACHE = `wr-images-${CACHE_VERSION}`;
@@ -25,6 +25,10 @@ const CORE_ASSETS = [
   './assets/images/manifest.json',
   './assets/images/luminance.json',
   './assets/audio/manifest.json',
+  './assets/globe/albedo.jpg',
+  './assets/globe/normal.jpg',
+  './assets/globe/countries.png',
+  './assets/globe/palette.png',
   './js/main.js',
   './js/core/constants.js',
   './js/core/paths.js',
