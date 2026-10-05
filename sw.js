@@ -7,7 +7,7 @@
  *
  * 修改任何资源后请把 CACHE_VERSION 加一，否则老用户会一直看到旧缓存。
  */
-const CACHE_VERSION = 'v8';
+const CACHE_VERSION = 'v9';
 const CORE_CACHE = `wr-core-${CACHE_VERSION}`;
 const AUDIO_CACHE = `wr-audio-${CACHE_VERSION}`;
 const IMAGE_CACHE = `wr-images-${CACHE_VERSION}`;
