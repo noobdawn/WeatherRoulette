@@ -31,7 +31,7 @@
 index.html                极简主页面（满屏壁纸 + 居中大字）
 style.css
 large.html / large.css    大屏版：整屏单城 + 自带播放控制，适合投屏/电视
-sw.js                     Service Worker：分区离线缓存（当前 CACHE_VERSION = v5）
+sw.js                     Service Worker：分区离线缓存（当前 CACHE_VERSION = v7）
 data/
   cities.json             81 座城市（国内 43 + 国外 38）：中英名、国家、经纬度、时区、地标关键词
   wmo-map.json            WMO 天气码 → 中文词/英文词/图标键/音频键
@@ -261,6 +261,55 @@ right = normalize(cross(up, dir))
 纹理约定（**容易画反，务必核对**）：等距圆柱，`u = (lon+180)/360`（西→东），
 `v = (90−lat)/180`（北→南），即**第一行是北极**。
 
+### 逼近/拉远：缩放定标（别再用固定倍率）
+
+老板要求「拉远程度与两城距离成正比：几百公里只拉远一点点，几千公里拉到地球恰好填满画面三分之二」。
+正交投影下地球轮廓恒为半径 `R` 的圆盘，所以"拉远"就是让 `R` 随距离变 —— **相机数学完全不用动**。
+
+```
+side  = min(w, h)                                     // 视口短边
+kNear = (zoomNearMinSideRatio * 0.5 * side) / R_base  // 近景（最近两城）
+kFar  = (zoomFarMinSideRatio  * 0.5 * side) / R_base  // 远景（最远两城）
+t     = clamp(dKm / (π · 6371.0088), 0, 1) ** zoomPower
+k     = kNear + (kFar - kNear) * t
+R     = R_base * k,   R_base = min(w * 0.44, h * 0.34)
+```
+
+**两个必须理解的坑**（都是实测踩出来的）：
+
+1. **不能按"固定倍率"定标，要按"占视口短边的比例"**。
+   `R_base` 本身在桌面端已占短边 68%，比三分之二还大 —— 此时"拉到三分之二"只需缩小 2%，
+   拉远幅度为零，甚至会出现 **kFar(0.9804) < kNear(0.90)、最远处反而比最近处大**的矛盾。
+   改成两个比例后由渲染器按每个视口实时反解 `k`，各视口拉远幅度统一为 **22.5%**，这才看得出来。
+2. **距离分布决定了必须做非线性压缩**。实测（`tools/city-distances.py`，81 城全部 3240 个城对）：
+   最近 8.7 km（珠海↔澳门）、P25 1558 km、P50 7202 km、最远 19597 km（奥克兰↔马德里）。
+   而**一轮 20 城随机打乱后，相邻两城距离的中位数是 7177 km** ——
+   纯线性映射会让绝大多数转场直接顶到最远端，所以用 `t ** 0.55` 压缩。
+
+实测（1440×900，`R_base=306`，`kNear=1.2647`，`kFar=0.9804`）：
+
+| 城市对 | 距离 | k | 直径/短边 |
+|---|---|---|---|
+| 珠海↔澳门 | 8.7 km | 1.2607 | **0.8573**（近景） |
+| 合肥↔东京 | 2112 km | 1.1822 | 0.8039 |
+| 北京↔伦敦 | 8141 km | 1.0914 | 0.7421 |
+| 奥克兰↔马德里 | 19597 km | 0.9837 | **0.6689**（≈2/3） |
+
+> `k` 会大于 1（近景半径 387 > `R_base` 306），这是有意的，不是 bug。
+> 最远城对是 0.6689 而非精确 2/3，因为严格对跖是 20015 km、数据集最远只到 19597（`t'=0.9884`）——
+> 是数据上限而非实现偏差。
+
+**时间轴**：缩放包络与「两端各留 10% 静止」严格对齐 ——
+0~10% 拉远（此时镜头方向静止，观感就是"镜头往后退"）→ 中段保持 → 90~100% 推近 →
+停留段停在近景脉冲。总时长不变（实测 6203ms）。
+
+**Canvas 2D 降级路径要注意**：海面圆盘/边缘减光/柔光/高光原本烘在预渲染底图里，
+`R` 一变就会错位，所以拆成每帧按当前 `view.R` 绘制（预渲染底图只留夜空+星星）。
+
+配套工具：`tools/calibrate-globe-zoom.py`（各视口 kNear/kFar 与拉远幅度对照表）、
+`tools/preview-globe-zoom.py`（把"距离 → 球直径占比"画成图 + 三种距离的球大小对比）、
+`tools/city-distances.py`（真实距离分布，定标的依据）。
+
 #### 踩过的坑
 
 | 坑 | 现象 | 结论 |
@@ -458,6 +507,7 @@ node tools/e2e-offline.mjs                   # 断网后仍能打开并继续播
 | 界面样式 | `style.css`（主页面）、`large.css`（大屏版）。**不要**把控制条加回主页面 |
 | 地球贴图 | `python tools/gen-globe-textures.py`（可用 `--albedo-width` 调体积）→ `tools/preview-globe-textures.py` 与 `inspect-globe-borders.py` 肉眼核对 |
 | 地球过场时长/开关 | `js/core/constants.js` 的 `GLOBE`（`enabled` / `duration` / `holdMs` / `fadeMs`） |
+| 地球拉远幅度 | `js/core/constants.js` 的 `GLOBE`（`zoomPower` / `zoomNearMinSideRatio` / `zoomFarMinSideRatio`）；改完跑 `python tools/calibrate-globe-zoom.py` 看各视口的拉远幅度是否还合理 |
 | 加载页 | `js/ui/loading.js`（自包含样式，不依赖 style.css）；保持「细进度条 + 强制进入」的极简形态 |
 | 任何资源改动后 | **把 `sw.js` 的 `CACHE_VERSION` 加一** |
 

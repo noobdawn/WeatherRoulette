@@ -22,6 +22,12 @@
 //   WebGL 不可用、贴图加载失败、上下文丢失时自动回退到第一代，**绝不留白、绝不报错到界面**。
 // 两条路径共用下面同一套相机基与 slerp，所以「正北朝上」在哪种渲染下都成立。
 //
+// ─────────────────────────── 逼近 / 拉远 ───────────────────────────
+// 老板要求「拉远程度与两城距离成正比」：几百公里只拉远一点点，几千公里拉到地球直径
+// 占满视口短边的 2/3。正交投影下地球的屏幕轮廓恒为半径 R 的圆盘，所以缩放 = 改 R：
+//   出发先拉远（此时镜头还没开始转）→ 飞行中保持 → 抵达再推近，落在目标城市的近景。
+// R 与相机基完全解耦（up 仍然是每帧从「北」重算出来的），所以正北朝上的判据一个数字都不变。
+//
 // 依赖：js/core/constants.js 的 GLOBE / GLOBE_TEXTURES_DIR（都做了完整兜底）、
 //       js/ui/globe-data.js 的 LAND / BORDERS（降级路径用，动态 import，不拖慢首屏）。
 
@@ -36,6 +42,10 @@ const GLOBE_FALLBACK = {
   fadeMs: 400,
   minLat: -85,
   maxLat: 85,
+  // 逼近/拉远：近景与远景的「球直径 ÷ 视口短边」，k 由渲染器按每个视口实时反解
+  zoomPower: 0.55,
+  zoomNearMinSideRatio: 0.86,
+  zoomFarMinSideRatio: 2 / 3,
 };
 
 /** 贴图目录兜底（constants.js 里是 GLOBE_TEXTURES_DIR） */
@@ -59,6 +69,10 @@ function readGlobeConfig() {
     fadeMs: Math.round(num('fadeMs', 0, 5000)),
     minLat: Math.min(minLat, maxLat - 1),
     maxLat,
+    // 逼近/拉远：三条参数都从 constants.js 的 GLOBE 读，绝不硬编码
+    zoomPower: num('zoomPower', 0.05, 4),
+    zoomNearMinSideRatio: num('zoomNearMinSideRatio', 0.05, 3),
+    zoomFarMinSideRatio: num('zoomFarMinSideRatio', 0.05, 3),
   };
 }
 
@@ -240,6 +254,77 @@ function easePlateau(p) {
   const H = 0.1;
   const s = clamp((p - H) / (1 - 2 * H), 0, 1);
   return s * s * (3 - 2 * s);
+}
+
+/** 0~1 的 smoothstep（与 easePlateau 内部同一套曲线）。 */
+function smoothstep01(s) {
+  return s * s * (3 - 2 * s);
+}
+
+// ───────────────────────────────────────────────────────────── 逼近 / 拉远
+// 老板要求：**拉远程度与两城距离成正比** —— 相隔几百公里只拉远一点点，
+// 相隔几千公里就拉到「地球恰好填满画面的三分之二」。
+//
+// 做法：正交投影下地球在屏幕上永远是一个半径 R 的圆盘，所以「逼近/拉远」就是让 R 随距离变。
+// 相机数学（up = normalize(north − (north·dir)·dir)，每帧重算）与 R **完全解耦**，
+// 所以这一块一行都不用动 —— 缩放只改 R，屏幕上方照样恒为真北。
+//
+// 定标（tools/calibrate-globe-zoom.py 反解，数值写在 constants.js 的 GLOBE）：
+//   近景：球直径 = 视口短边 × zoomNearMinSideRatio（0.86）
+//   远景：球直径 = 视口短边 × zoomFarMinSideRatio（2/3，老板原话）
+//   k 是相对历史基准半径 R_base = min(w·0.44, h·0.34) 的倍率，**按每个视口实时反解**，
+//   于是桌面 / 笔记本 / 手机 / 大屏的拉远幅度统一为 22.5%（k 会大于 1，这是有意的）。
+const R_EARTH_KM = 6371.0088;
+/** 两城理论最大距离（对跖点）≈ 20015.1 km，用来把距离归一化到 0~1 */
+const MAX_PAIR_KM = Math.PI * R_EARTH_KM;
+
+/**
+ * 两座城市之间的大圆距离（km）。
+ * 公式与 tools/city-distances.py 完全一致（否则定标对不上）；
+ * lon 差值用 sin(dl/2)² 表达，天然处理跨 ±180°，不要改成线性差。
+ */
+function haversineKm(a, b) {
+  const p1 = a.lat * DEG;
+  const p2 = b.lat * DEG;
+  const dp = p2 - p1;
+  const dl = (b.lon - a.lon) * DEG;
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R_EARTH_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** 历史基准球半径（k 的基准）。 */
+function baseRadius(w, h) {
+  return Math.min(w * 0.44, h * 0.34);
+}
+
+/**
+ * 按视口 + 两城距离反解这一次转场的缩放参数（纯函数，方便自测直接核对）。
+ *   kNear / kFar 由「直径 = 视口短边 × 比例」反解；k 用距离的幂次做非线性插值
+ *   （t' = t^zoomPower，<1 把远距离压缩，避免平时的转场都顶到最远端）。
+ * @returns {{Rbase:number, side:number, kNear:number, kFar:number, t:number, k:number, distKm:number}}
+ */
+function zoomFor(w, h, distKm, cfg) {
+  const Rbase = baseRadius(w, h);
+  const side = Math.min(w, h);
+  const kNear = (cfg.zoomNearMinSideRatio * 0.5 * side) / Rbase;
+  const kFar = (cfg.zoomFarMinSideRatio * 0.5 * side) / Rbase;
+  const span = Number.isFinite(distKm) && distKm > 0 ? distKm : 0;
+  const t = clamp(span / MAX_PAIR_KM, 0, 1) ** cfg.zoomPower;
+  return { Rbase, side, kNear, kFar, t, k: kNear + (kFar - kNear) * t, distKm: span };
+}
+
+/**
+ * 拉远/推近的时间轴包络，与 easePlateau 的「两端各留 10% 静止」严格对齐：
+ *   前 10%（镜头方向还没开始转）拉远 → 中段保持 → 最后 10%（方向已停住）推近。
+ * 这样观感就是「镜头往后退把两座城市收进来 → 转过去 → 再推近看清目标城市」，
+ * 而且不额外占用时间轴（总时长仍然是 duration + holdMs）。
+ */
+function zoomEnvelope(p) {
+  const H = 0.1;
+  return {
+    out: smoothstep01(clamp(p / H, 0, 1)),
+    back: smoothstep01(clamp((p - (1 - H)) / H, 0, 1)),
+  };
 }
 
 // ───────────────────────────────────────────────────────────── 2D 几何缓存
@@ -1236,7 +1321,25 @@ export class Globe {
     this._seq = 0;
     this._last = { from: null, to: null, progress: 0, frames: 0, fps: 0 };
     this._basis = { dir: [0, 0, 1], up: [0, 1, 0], right: [1, 0, 0], forward: [0, 0, -1] };
-    this._view = { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, R: 0 };
+    this._view = { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, R: 0, Rbase: 0, k: 0, side: 0, distKm: 0 };
+    // 逼近/拉远的诊断快照（rendererInfo.zoom / viewport 都读它）
+    this._zoom = {
+      active: false,
+      phase: 'idle', // idle | zoom-out | cruise | zoom-in | arrived | near
+      k: 0,
+      kNear: 0,
+      kFar: 0,
+      kTarget: 0, // 本次转场按距离反解出的目标倍率
+      t: 0,
+      R: 0,
+      Rbase: 0,
+      side: 0,
+      distKm: 0,
+      ratioNow: 0, // 当前「球直径 ÷ 视口短边」
+      ratioNear: 0, // 近景比例（应等于 zoomNearMinSideRatio）
+      ratioFar: 0, // 远景比例（应等于 zoomFarMinSideRatio）
+      ratioTarget: 0, // 本次转场目标比例
+    };
     this._supported = null;
 
     // ── 渲染路径状态 ──
@@ -1308,6 +1411,8 @@ export class Globe {
       chinaId: this._chinaId,
       aniso: this._gl ? this._gl.aniso : 0,
       tuning: this._gl ? { ...this._gl.tuning } : {},
+      // 逼近/拉远：k 是当前半径倍率，distKm 是本次转场的两城距离
+      zoom: { ...this._zoom },
       webgl: this._gl && this._gl.info ? { ...this._gl.info } : null,
       buffer: this._gl && this._gl.ok
         ? { w: this._gl.canvas.width, h: this._gl.canvas.height, scale: Number((this._gl.scale || 1).toFixed(3)) }
@@ -1377,10 +1482,24 @@ export class Globe {
     };
   }
 
-  /** 当前画布视口（CSS 像素）：球心 (cx,cy) 与球面半径 R。 */
+  /**
+   * 当前画布视口（CSS 像素）：球心 (cx,cy) 与球面半径 R。
+   * Rbase 是基准半径、k = R / Rbase 是当前的逼近/拉远倍率、distKm 是本次转场的两城距离。
+   */
   get viewport() {
     const v = this._view;
-    return { w: v.w, h: v.h, dpr: v.dpr, cx: v.cx, cy: v.cy, R: v.R };
+    return {
+      w: v.w,
+      h: v.h,
+      dpr: v.dpr,
+      cx: v.cx,
+      cy: v.cy,
+      R: v.R,
+      Rbase: v.Rbase || 0,
+      k: v.k || 0,
+      side: v.side || Math.min(v.w, v.h),
+      distKm: v.distKm || 0,
+    };
   }
 
   /** 覆盖层当前是否挂在 DOM 上（自动化测试用）。 */
@@ -1531,6 +1650,11 @@ export class Globe {
       fade: this._cfg.fadeMs,
       total: this._cfg.duration + this._cfg.holdMs,
       view: null,
+      k: 0, // 当前逼近/拉远倍率（每帧由 _applyZoom 写入）
+      // 逼近/拉远：两城距离决定本次转场的缩放倍率（zoomCfg 在 _layout 里按视口反解）
+      distKm: fromCity && toCity ? haversineKm(fromCity, toCity) : 0,
+      zoomCfg: null,
+      countryRef: 1,
       bg: null,
       geo: null,
       dirFrom: [0, 0, 1],
@@ -1977,6 +2101,8 @@ export class Globe {
     }
     if (this._run === run) this._run = null;
     this._last = { from: run.from, to: run.to, progress: 1, frames: run.frames, fps: run.fps };
+    // 缩放快照留着（收尾后 rendererInfo.zoom 仍能读到本次转场的 k / 距离），只标记不再动画
+    this._zoom.active = false;
     run.el = null;
     run.canvas = null;
     run.ctx = null;
@@ -1997,6 +2123,57 @@ export class Globe {
     return typeof window !== 'undefined' ? window : null;
   }
 
+  // ── 内部：逼近 / 拉远 ───────────────────────────────────────
+  /** 把「这个视口 + 这个距离」解出来的缩放参数写进诊断快照。 */
+  _syncZoomInfo(z, view) {
+    const info = this._zoom;
+    info.kNear = z.kNear;
+    info.kFar = z.kFar;
+    info.kTarget = z.k; // 本次转场按距离反解出的目标倍率（介于 kNear 与 kFar 之间）
+    info.t = z.t;
+    info.Rbase = z.Rbase;
+    info.side = z.side;
+    info.distKm = z.distKm;
+    info.ratioNear = (2 * z.Rbase * z.kNear) / z.side;
+    info.ratioFar = (2 * z.Rbase * z.kFar) / z.side;
+    info.ratioTarget = (2 * z.Rbase * z.k) / z.side;
+    info.k = view.k;
+    info.R = view.R;
+    info.ratioNow = (2 * view.R) / z.side;
+  }
+
+  /**
+   * 每帧把缩放写进 run.view.R（所有绘制都从 view.R 取半径，所以一处生效、两条渲染路径都跟上）。
+   * 时间轴：出发先拉远 → 飞行中保持 → 抵达再推近，包络与 easePlateau 的两端静止段对齐。
+   * reduced-motion 下不做缩放动作，直接停在目标城市的近景。
+   */
+  _applyZoom(run, animP) {
+    const view = run.view;
+    const z = run.zoomCfg;
+    if (!view || !z) return;
+    let k;
+    let phase;
+    if (run.reduced) {
+      k = z.kNear;
+      phase = 'near';
+    } else {
+      const { out, back } = zoomEnvelope(animP);
+      // 注意是朝着**本次转场按距离反解出来的 k**（z.k）拉远，不是无脑拉到 kFar
+      k = z.kNear + (z.k - z.kNear) * out;
+      k = k + (z.kNear - k) * back;
+      phase = animP >= 1 ? 'arrived' : out < 1 ? 'zoom-out' : back > 0 ? 'zoom-in' : 'cruise';
+    }
+    run.k = k;
+    view.k = k;
+    view.R = z.Rbase * k;
+    const info = this._zoom;
+    info.active = true;
+    info.k = k;
+    info.R = view.R;
+    info.ratioNow = (2 * view.R) / z.side;
+    info.phase = phase;
+  }
+
   // ── 内部：布局与预渲染 ─────────────────────────────────────
   _layout(run) {
     const win = this._win();
@@ -2010,9 +2187,30 @@ export class Globe {
     const pw = Math.round(w * dpr);
     const ph = Math.round(h * dpr);
 
-    const view = { w, h, dpr, cx: w / 2, cy: h / 2, R: Math.min(w * 0.44, h * 0.34) };
+    // ── 逼近/拉远：k 必须按**每个视口实时反解**（写死就会出现某些分辨率下不成立）──
+    const z = zoomFor(w, h, run.distKm, this._cfg);
+    run.zoomCfg = z;
+    // 国家蒙版强度按「近景半径」定，转场全程不跟着缩放抖（否则像在呼吸）
+    run.countryRef = clamp((z.Rbase * z.kNear) / 420, 0.45, 1);
+    // 重排（窗口 resize）时保留当前动画进度对应的倍率，不要弹回近景
+    const k0 = run.k > 0 ? run.k : z.kNear;
+    run.k = k0;
+
+    const view = {
+      w,
+      h,
+      dpr,
+      cx: w / 2,
+      cy: h / 2,
+      R: z.Rbase * k0,
+      Rbase: z.Rbase,
+      k: k0,
+      side: z.side,
+      distKm: z.distKm,
+    };
     run.view = view;
     this._view = view;
+    this._syncZoomInfo(z, view);
 
     const sizeCanvas = (c) => {
       if (!c) return;
@@ -2040,16 +2238,13 @@ export class Globe {
     const doc = this._doc;
     const view = run.view;
     if (!doc || !view) return;
-    // 尺寸变了必须重画：预渲染底图里的海面圆盘是按 R 画的，拉伸复用会错位
+    // 尺寸变了必须重画（画布不能被拉伸复用）
     if (run.bg && (run.bgW !== view.w || run.bgH !== view.h || run.bgDpr !== view.dpr)) {
       run.bg = null;
     }
     if (run.bg) return;
     const pw = Math.max(1, Math.round(view.w * view.dpr));
     const ph = Math.max(1, Math.round(view.h * view.dpr));
-    const cx = view.cx;
-    const cy = view.cy;
-    const R = view.R;
 
     const base = doc.createElement('canvas');
     base.width = pw;
@@ -2063,14 +2258,6 @@ export class Globe {
     sky.addColorStop(0.55, '#0a1734');
     sky.addColorStop(1, '#050c1c');
     bx.fillStyle = sky;
-    bx.fillRect(0, 0, view.w, view.h);
-
-    // 球体背后的柔光
-    const halo = bx.createRadialGradient(cx, cy, R * 0.7, cx, cy, R * 1.75);
-    halo.addColorStop(0, 'rgba(58,124,214,0.42)');
-    halo.addColorStop(0.55, 'rgba(40,92,176,0.16)');
-    halo.addColorStop(1, 'rgba(10,25,60,0)');
-    bx.fillStyle = halo;
     bx.fillRect(0, 0, view.w, view.h);
 
     // 星星（固定种子，换城时星空不跳）
@@ -2089,12 +2276,40 @@ export class Globe {
     }
     bx.restore();
 
+    // 注意：球体柔光 / 海面圆盘 / 边缘减光 / 受光高光都与 R 有关，
+    // 逼近-拉远时 R 每帧都在变，所以那几层不能烘在这里，见 _drawBackdrop2D()。
+    run.bg = base;
+    run.bgW = view.w;
+    run.bgH = view.h;
+    run.bgDpr = view.dpr;
+  }
+
+  /**
+   * 球体背后的柔光 + 海面圆盘 + 边缘减光 + 受光高光（第一代路径）。
+   * 这几层全部按**当前** view.R 画，所以拉远/推近时每帧重画 —— 被烘进预渲染底图就会错位。
+   */
+  _drawBackdrop2D(ctx, run) {
+    const view = run.view;
+    const R = view.R;
+    const cx = view.cx;
+    const cy = view.cy;
+    if (!(R > 0)) return;
+
+    // 球体背后的柔光（只填该渐变实际覆盖的方框，别每帧刷满整屏）
+    ctx.save();
+    const haloR = R * 1.75;
+    const halo = ctx.createRadialGradient(cx, cy, R * 0.7, cx, cy, haloR);
+    halo.addColorStop(0, 'rgba(58,124,214,0.42)');
+    halo.addColorStop(0.55, 'rgba(40,92,176,0.16)');
+    halo.addColorStop(1, 'rgba(10,25,60,0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(cx - haloR, cy - haloR, haloR * 2, haloR * 2);
+
     // 海洋：球面圆盘（正交投影下轮廓永远是圆心固定的圆）
-    bx.save();
-    bx.beginPath();
-    bx.arc(cx, cy, R, 0, Math.PI * 2);
-    bx.clip();
-    const sea = bx.createRadialGradient(
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.clip();
+    const sea = ctx.createRadialGradient(
       cx - R * 0.3,
       cy - R * 0.34,
       R * 0.05,
@@ -2106,19 +2321,19 @@ export class Globe {
     sea.addColorStop(0.45, '#2b73c8');
     sea.addColorStop(0.8, '#174e94');
     sea.addColorStop(1, '#0b2d5e');
-    bx.fillStyle = sea;
-    bx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    ctx.fillStyle = sea;
+    ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
     // 边缘减光，让球看起来是球而不是贴纸
-    const limb = bx.createRadialGradient(cx, cy, R * 0.62, cx, cy, R);
+    const limb = ctx.createRadialGradient(cx, cy, R * 0.62, cx, cy, R);
     limb.addColorStop(0, 'rgba(4,14,34,0)');
     limb.addColorStop(0.82, 'rgba(4,14,34,0.10)');
     limb.addColorStop(1, 'rgba(3,10,26,0.52)');
-    bx.fillStyle = limb;
-    bx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    ctx.fillStyle = limb;
+    ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
 
     // 左上角的一点高光，卡通感的「受光面」
-    const glow = bx.createRadialGradient(
+    const glow = ctx.createRadialGradient(
       cx - R * 0.42,
       cy - R * 0.46,
       0,
@@ -2129,14 +2344,9 @@ export class Globe {
     glow.addColorStop(0, 'rgba(190,228,255,0.20)');
     glow.addColorStop(0.5, 'rgba(150,205,255,0.05)');
     glow.addColorStop(1, 'rgba(150,205,255,0)');
-    bx.fillStyle = glow;
-    bx.fillRect(cx - R, cy - R, R * 2, R * 2);
-    bx.restore();
-
-    run.bg = base;
-    run.bgW = view.w;
-    run.bgH = view.h;
-    run.bgDpr = view.dpr;
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+    ctx.restore();
   }
 
   // ── 内部：逐帧绘制 ─────────────────────────────────────────
@@ -2151,6 +2361,9 @@ export class Globe {
 
     const animP = clamp(t / (run.dur || 1), 0, 1);
     run.progress = animP;
+
+    // ★ 逼近/拉远：只改球面半径 R，相机基与 slerp 完全不受影响
+    this._applyZoom(run, animP);
 
     const s = run.reduced ? 1 : easePlateau(animP);
     const dir = slerpDir(run.dirFrom, run.dirTo, s, run.dirNow);
@@ -2202,8 +2415,9 @@ export class Globe {
       cy: view.cy,
       R: view.R,
       light,
-      // 小屏（手机）上球很小，国家索引图用 NEAREST 会闪，蒙版相应收一点
-      country: TUNE.country * clamp(view.R / 420, 0.45, 1),
+      // 小屏（手机）上球很小，国家索引图用 NEAREST 会闪，蒙版相应收一点。
+      // 用本次转场的「近景半径」定标：缩放过程中蒙版强度保持恒定，不会一呼一吸。
+      country: TUNE.country * (run.countryRef || clamp(view.R / 420, 0.45, 1)),
     };
     try {
       return gl.draw(frame);
@@ -2224,6 +2438,7 @@ export class Globe {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     ctx.globalAlpha = 1;
     ctx.drawImage(run.bg, 0, 0, view.w, view.h);
+    this._drawBackdrop2D(ctx, run);
     this._drawGraticule(ctx, run);
     this._drawLand(ctx, run);
     this._drawBorders(ctx, run);

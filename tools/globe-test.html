@@ -31,6 +31,15 @@ const FALLBACK_CITIES = {
   singapore: { id: 'singapore', zh: '新加坡', en: 'Singapore', lat: 1.3521, lon: 103.8198 },
   // 赤道本初子午线：合成贴图的四象限探针用它当终点（相机 settle 在 (0,0)）
   greenwich: { id: 'greenwich', zh: '本初子午线', en: 'Null Island', lat: 0, lon: 0 },
+  // 逼近/拉远的定标城市对（坐标同 data/cities.json，cities.json 读不到时也能自测）
+  zhuhai: { id: 'zhuhai', zh: '珠海', en: 'Zhuhai', lat: 22.271, lon: 113.5767 },
+  macau: { id: 'macau', zh: '澳门', en: 'Macau', lat: 22.1987, lon: 113.5439 },
+  guangzhou: { id: 'guangzhou', zh: '广州', en: 'Guangzhou', lat: 23.1291, lon: 113.2644 },
+  foshan: { id: 'foshan', zh: '佛山', en: 'Foshan', lat: 23.0218, lon: 113.1219 },
+  tianjin: { id: 'tianjin', zh: '天津', en: 'Tianjin', lat: 39.3434, lon: 117.3616 },
+  auckland: { id: 'auckland', zh: '奥克兰', en: 'Auckland', lat: -36.8485, lon: 174.7633 },
+  madrid: { id: 'madrid', zh: '马德里', en: 'Madrid', lat: 40.4168, lon: -3.7038 },
+  london: { id: 'london', zh: '伦敦', en: 'London', lat: 51.5074, lon: -0.1278 },
 };
 
 let CITIES = { ...FALLBACK_CITIES };
@@ -116,6 +125,12 @@ function takeSample() {
     progress: g.state.progress,
     running: g.state.running,
     mode: g.rendererMode,
+    // ── 逼近/拉远：逐帧记录半径倍率 k = R / Rbase（断言用）──
+    k: view.k || 0,
+    R: view.R,
+    Rbase: view.Rbase || 0,
+    side: view.side || Math.min(view.w, view.h),
+    distKm: view.distKm || 0,
   });
 }
 
@@ -153,6 +168,66 @@ function summarize() {
     }
   }
   const spanMs = samples.length > 1 ? samples[samples.length - 1].t - samples[0].t : 0;
+
+  // ── 逼近/拉远：逐帧 k 的聚合（近景 / 中段 / 收尾 / 平滑性）──
+  let firstK = null;
+  let lastK = null;
+  let minK = Infinity;
+  let maxK = -Infinity;
+  let maxDk = 0;
+  let prevK = null;
+  let kAtMid = null;
+  let midDist = Infinity;
+  let Rbase = 0;
+  let side = 0;
+  let distKm = 0;
+  for (const s of samples) {
+    if (!(s.k > 0)) continue;
+    if (firstK === null) firstK = s.k;
+    lastK = s.k;
+    minK = Math.min(minK, s.k);
+    maxK = Math.max(maxK, s.k);
+    if (prevK !== null) {
+      maxDk = Math.max(maxDk, Math.abs(s.k - prevK));
+    }
+    prevK = s.k;
+    const d = Math.abs(s.progress - 0.5);
+    if (d < midDist) {
+      midDist = d;
+      kAtMid = s.k;
+    }
+    Rbase = s.Rbase;
+    side = s.side;
+    distKm = s.distKm;
+  }
+  const empty = firstK === null;
+  const range = empty ? 0 : maxK - minK;
+  const insideFrames = empty
+    ? 0
+    : samples.filter((s) => s.k > 0 && s.k > minK + range * 0.01 && s.k < maxK - range * 0.01).length;
+  const ratioOf = (k) => (Rbase > 0 && side > 0 && k != null ? (2 * k * Rbase) / side : null);
+  const zoom = {
+    samples: samples.filter((s) => s.k > 0).length,
+    firstK,
+    lastK,
+    minK: empty ? null : minK,
+    maxK: empty ? null : maxK,
+    kAtMid,
+    maxDk,
+    Rbase,
+    side,
+    distKm,
+    ratioFirst: ratioOf(firstK),
+    ratioMid: ratioOf(kAtMid),
+    ratioLast: ratioOf(lastK),
+    ratioMin: empty ? null : ratioOf(minK),
+    ratioMax: empty ? null : ratioOf(maxK),
+    // 拉远幅度：近景半径 → 远景半径缩小了多少（配合 kNear/kFar 一起看）
+    shrink: empty || !(maxK > 0) ? null : 1 - minK / maxK,
+    // 处于两端之间的帧数：为 0 就说明缩放是「瞬间切换」而不是过渡
+    insideFrames,
+  };
+
   return {
     count: samples.length,
     skipped,
@@ -169,6 +244,7 @@ function summarize() {
     maxPoleGap,
     nullPoles,
     modes: [...modes],
+    zoom,
     firstSample: samples[0] || null,
     lastSample: samples[samples.length - 1] || null,
   };
@@ -829,6 +905,113 @@ window.__quadrantProbe = async (fromId = 'reykjavik', toId = 'greenwich') => {
   const info = { rendererMode: g.rendererMode, rendererReason: g.rendererReason };
   await p;
   return { shots, info, view };
+};
+
+// ══════════════════════════════════════════════════════════════
+// 逼近 / 拉远：像素级实测「画出来的球有多大」
+// ══════════════════════════════════════════════════════════════
+// 正交投影下球的屏幕轮廓恒为半径 R 的圆。为了**实测**而不是相信 view.R，
+// 这里用一张纯红贴图 + 关掉边缘光/高光/经纬网：红盘边界就是球面轮廓。
+// 天空是蓝主导、星星接近灰白（r≈b），于是沿球心所在的那一行扫描
+// 「R 通道显著大于 B 通道」的连续段，其长度就是实测直径（CSS 像素）。
+
+function makeRedAlbedo() {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 32;
+  const x = c.getContext('2d');
+  x.fillStyle = '#ff2a1c';
+  x.fillRect(0, 0, 64, 32);
+  return c.toDataURL('image/png');
+}
+
+/**
+ * @param {{atMs?:number, fromId?:string, toId?:string}} opts
+ *   atMs：动画开始后多久取帧。2500ms ⇒ 飞行中段（最远处）；5400ms ⇒ 停留段（近景）。
+ */
+window.__measureDisc = async ({ atMs = 2500, fromId = 'reykjavik', toId = 'singapore' } = {}) => {
+  const from = CITIES[fromId];
+  const to = CITIES[toId];
+  if (!from || !to) return { error: `未知城市 ${fromId} / ${toId}` };
+  const g = window.__makeGlobe({
+    assets: {
+      albedo: makeRedAlbedo(),
+      normal: makeFlatNormal(),
+      countries: makeAllLandCountries(),
+      palette: makeWhitePalette(),
+    },
+  });
+  g.setTuning({ rim: 0, spec: 0, grid: 0 });
+
+  const p = window.__runPairOn(g, from, to);
+  await new Promise((r) => setTimeout(r, atMs));
+  const cap = g.captureFrame();
+  const view = g.viewport;
+  const zoom = g.rendererInfo.zoom;
+
+  let scan = null;
+  if (cap) {
+    const s = cap.scale || 1;
+    const rowCss = view.cy;
+    const rowBuf = cap.flipY
+      ? cap.height - 1 - Math.round(rowCss * s)
+      : Math.round(rowCss * s);
+    let runLen = 0;
+    let best = 0;
+    let bestX0 = -1;
+    let bestX1 = -1;
+    let runStart = -1;
+    for (let x = 0; x < cap.width; x++) {
+      const i = (rowBuf * cap.width + x) * 4;
+      const r = cap.rgba[i];
+      const gg = cap.rgba[i + 1];
+      const bb = cap.rgba[i + 2];
+      const isGlobe = r > gg + 30 && r > bb + 30;
+      if (isGlobe) {
+        if (runLen === 0) runStart = x;
+        runLen++;
+        if (runLen > best) {
+          best = runLen;
+          bestX0 = runStart;
+          bestX1 = x;
+        }
+      } else {
+        runLen = 0;
+      }
+    }
+    scan = {
+      rowCss,
+      scale: s,
+      buffer: `${cap.width}×${cap.height}`,
+      measuredPx: best / s,
+      startX: bestX0 / s,
+      endX: bestX1 / s,
+      // 起点/终点相对球心的偏差（应当对称，说明扫到的就是球）
+      leftGap: view.cx - bestX0 / s,
+      rightGap: bestX1 / s - view.cx,
+    };
+  }
+
+  const out = {
+    atMs,
+    k: view.k,
+    R: view.R,
+    Rbase: view.Rbase,
+    side: view.side,
+    distKm: view.distKm,
+    kNear: zoom.kNear,
+    kFar: zoom.kFar,
+    zoomPhase: zoom.phase,
+    expectedPx: 2 * view.R,
+    measuredPx: scan ? scan.measuredPx : null,
+    ratioMeasured: scan ? scan.measuredPx / view.side : null,
+    ratioExpected: (2 * view.R) / view.side,
+    scan,
+    rendererMode: g.rendererMode,
+    rendererReason: g.rendererReason,
+  };
+  await p;
+  return out;
 };
 
 // ── 强制 WebGL 不可用（模拟老设备 / 驱动黑名单）────────────────

@@ -20,11 +20,15 @@ assets/audio/.orig/
 tools/last-dom.html
 tools/shots/
 tools/_probe/
+# 排查用的一次性脚本与日志（下划线前缀表示临时，正式脚本不带下划线）
+tools/_*.mjs
+tools/_*.log
 
 # 素材核对用的预览图（由 tools/preview-*.py 生成，随时可重跑，不入库）
 tools/globe-preview.png
 tools/globe-textures-preview.png
 tools/globe-border-crops.png
+tools/globe-zoom-preview.png
 
 # 编辑器
 .vscode/

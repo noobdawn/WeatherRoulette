@@ -50,6 +50,17 @@ const skip = (name, detail = '') => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fmt = (n, d = 3) => (typeof n === 'number' && Number.isFinite(n) ? n.toExponential(d) : String(n));
 
+// Node 侧独立实现一份大圆距离，用来对照页面里 globe.js 的 haversine（两边都错才会一起错）
+const R_EARTH_KM = 6371.0088;
+function haversineKm(a, b) {
+  const p1 = (a.lat * Math.PI) / 180;
+  const p2 = (b.lat * Math.PI) / 180;
+  const dp = p2 - p1;
+  const dl = ((b.lon - a.lon) * Math.PI) / 180;
+  const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R_EARTH_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
 // ────────────────────────────────────────────────────────── CDP 最小客户端
 class CDP {
   constructor(ws, sessionId = null) {
@@ -227,6 +238,14 @@ try {
       && dbg0.config.maxLat === 85
       && dbg0.config.enabled === true,
     `hasGlobeConst=${dbg0.hasGlobeConst} config=${JSON.stringify(dbg0.config)}`,
+  );
+  check(
+    // 逼近/拉远的三个常量同样必须来自 constants.js（不是硬编码在 globe.js 里）
+    'GLOBE 缩放常量：zoomPower=0.55 / 近景 0.86 / 远景 2/3',
+    dbg0.config.zoomPower === 0.55
+      && dbg0.config.zoomNearMinSideRatio === 0.86
+      && Math.abs(dbg0.config.zoomFarMinSideRatio - 2 / 3) < 1e-12,
+    `zoomPower=${dbg0.config.zoomPower} near=${dbg0.config.zoomNearMinSideRatio} far=${dbg0.config.zoomFarMinSideRatio}`,
   );
   const webglEnv = await session.eval('window.__webglAvailable()');
   check(
@@ -893,6 +912,265 @@ try {
     pole.info.rendererMode === 'webgl',
     `rendererMode=${pole.info.rendererMode} aniso=${pole.info.aniso}`,
   );
+
+  // ── 16. 逼近 / 拉远 ────────────────────────────────────────
+  console.log('\n【16】逼近 / 拉远：半径随两城距离变，最远时直径 = 视口短边的 2/3');
+
+  const coords = await session.eval(`({
+    zhuhai: window.__city('zhuhai'), macau: window.__city('macau'),
+    guangzhou: window.__city('guangzhou'), foshan: window.__city('foshan'),
+    hefei: window.__city('hefei'), tokyo: window.__city('tokyo'),
+    auckland: window.__city('auckland'), madrid: window.__city('madrid'),
+    beijing: window.__city('beijing'), london: window.__city('london'),
+    tianjin: window.__city('tianjin'),
+  })`);
+  const known = {
+    near: { a: 'zhuhai', b: 'macau', label: '珠海↔澳门' },
+    near2: { a: 'guangzhou', b: 'foshan', label: '广州↔佛山' },
+    mid: { a: 'hefei', b: 'tokyo', label: '合肥↔东京' },
+    mid2: { a: 'beijing', b: 'london', label: '北京↔伦敦' },
+    far: { a: 'auckland', b: 'madrid', label: '奥克兰↔马德里' },
+  };
+  for (const p of Object.values(known)) {
+    const ca = coords[p.a];
+    const cb = coords[p.b];
+    p.km = ca && cb ? haversineKm(ca, cb) : NaN;
+  }
+  console.log(
+    '  城市对距离（Node 侧独立算）：' +
+      Object.values(known)
+        .map((p) => `${p.label} ${p.km.toFixed(1)}km`)
+        .join(' / '),
+  );
+
+  /** 跑一次转场：2500ms 时是飞行中段（最远处），5400ms 时是停留段（近景收尾）。 */
+  const zoomRun = async (fromId, toId, shots = []) => {
+    await session.eval(`window.__begin(${JSON.stringify(fromId)}, ${JSON.stringify(toId)})`, {
+      awaitPromise: false,
+    });
+    await sleep(2500);
+    if (shots[0]) await shot(shots[0]);
+    await sleep(2900);
+    if (shots[1]) await shot(shots[1]);
+    const r = await session.eval('window.__awaitPending()');
+    const info = await session.eval('window.__globe.rendererInfo.zoom');
+    return { r, z: r.summary.zoom, info };
+  };
+
+  // 显式钉到 1440×900：下面的数值表按这个视口给（与 lead 的定标表对齐）
+  await session.send('Emulation.setDeviceMetricsOverride', {
+    width: 1440,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await sleep(250);
+
+  const zNear = await zoomRun('zhuhai', 'macau', [
+    '06-zoom-near-cruise-1440x900',
+    '07-zoom-near-arrived-1440x900',
+  ]);
+  const zNear2 = await zoomRun('guangzhou', 'foshan');
+  const zMid = await zoomRun('hefei', 'tokyo', [
+    '08-zoom-mid-cruise-1440x900',
+    '09-zoom-mid-arrived-1440x900',
+  ]);
+  const zMid2 = await zoomRun('beijing', 'london');
+  const zFar = await zoomRun('auckland', 'madrid', [
+    '10-zoom-far-cruise-1440x900',
+    '11-zoom-far-arrived-1440x900',
+  ]);
+
+  const table = [
+    ['近 珠海↔澳门', known.near, zNear],
+    ['近 广州↔佛山', known.near2, zNear2],
+    ['中 合肥↔东京', known.mid, zMid],
+    ['中 北京↔伦敦', known.mid2, zMid2],
+    ['远 奥克兰↔马德里', known.far, zFar],
+  ];
+  console.log('  1440×900 实测：');
+  console.log('    城市对               距离km       k       半径px   直径/短边');
+  for (const [name, p, r] of table) {
+    console.log(
+      `    ${name.padEnd(16)}${r.z.distKm.toFixed(1).padStart(9)}` +
+        `${r.z.kAtMid.toFixed(4).padStart(10)}${(r.z.kAtMid * r.z.Rbase).toFixed(1).padStart(10)}` +
+        `${r.z.ratioMid.toFixed(4).padStart(12)}`,
+    );
+  }
+
+  check(
+    '页面里的 haversine 与 Node 侧独立实现一致（5 对城市，误差 < 0.5km）',
+    table.every(([, p, r]) => Math.abs(r.z.distKm - p.km) < 0.5),
+    table.map(([, p, r]) => `${p.label} ${r.z.distKm.toFixed(2)}/${p.km.toFixed(2)}`).join(' '),
+  );
+  check(
+    '★ 近距离（珠海↔澳门 8.7km）：地球直径 ÷ 视口短边 ≈ 0.86 —— 逼近的近景',
+    Math.abs(zNear.z.ratioMid - 0.86) < 0.01 && Math.abs(zNear.z.ratioLast - 0.86) < 0.01,
+    `飞行中段 ${zNear.z.ratioMid.toFixed(4)} / 收尾 ${zNear.z.ratioLast.toFixed(4)}（k=${zNear.z.kAtMid.toFixed(4)}，半径 ${(zNear.z.kAtMid * zNear.z.Rbase).toFixed(1)}px）`,
+  );
+  check(
+    '★ 近距离的拉远幅度极小（k 全程变化 < 1%）——「几百公里只拉远一点点」',
+    zNear.z.maxK > 0 && (zNear.z.maxK - zNear.z.minK) / zNear.z.maxK < 0.01,
+    `k ∈ [${zNear.z.minK.toFixed(4)}, ${zNear.z.maxK.toFixed(4)}]，幅度 ${(((zNear.z.maxK - zNear.z.minK) / zNear.z.maxK) * 100).toFixed(2)}%`,
+  );
+  check(
+    `★ 远距离（奥克兰↔马德里 ${known.far.km.toFixed(0)}km）：实测直径 ÷ 视口短边 = 2/3（误差 <2%）`,
+    Math.abs(zFar.z.ratioMid - 2 / 3) / (2 / 3) < 0.02,
+    `实测 ${zFar.z.ratioMid.toFixed(4)}，目标 ${(2 / 3).toFixed(4)}，偏差 ${((zFar.z.ratioMid / (2 / 3) - 1) * 100).toFixed(2)}%（半径 ${(zFar.z.kAtMid * zFar.z.Rbase).toFixed(1)}px）`,
+  );
+  check(
+    '远景比例由「直径 = 视口短边 × 2/3」实时反解（ratioFar ≡ 2/3，任何视口都不写死）',
+    Math.abs(zFar.info.ratioFar - 2 / 3) < 1e-9 && Math.abs(zFar.info.ratioNear - 0.86) < 1e-9,
+    `ratioNear=${zFar.info.ratioNear} ratioFar=${zFar.info.ratioFar}（Rbase=${zFar.info.Rbase.toFixed(1)}px 短边=${zFar.info.side}px）`,
+  );
+  check(
+    '★ 拉远看得见：近景半径 → 远景半径缩小 22.5% 左右（不是 2% 那种等于没动）',
+    Math.abs(zFar.z.shrink - 0.225) < 0.02,
+    `实测 ${(zFar.z.shrink * 100).toFixed(2)}%（kNear=${zFar.info.kNear.toFixed(4)} → kFar=${zFar.info.kFar.toFixed(4)}，` +
+      `半径 ${(zFar.info.kNear * zFar.info.Rbase).toFixed(1)}px → ${(zFar.info.kFar * zFar.info.Rbase).toFixed(1)}px）`,
+  );
+  check(
+    `★ 中距离（合肥↔东京 ${known.mid.km.toFixed(0)}km）介于两者之间`,
+    zMid.z.kAtMid < zNear.z.kAtMid && zMid.z.kAtMid > zFar.z.kAtMid,
+    `k=${zMid.z.kAtMid.toFixed(4)}，直径/短边=${zMid.z.ratioMid.toFixed(4)}，半径 ${(zMid.z.kAtMid * zMid.z.Rbase).toFixed(1)}px`,
+  );
+  check(
+    '距离越远 → k 单调越小（近 < 中 < 远 的 k 序关系成立）',
+    zNear.z.kAtMid > zMid.z.kAtMid && zMid.z.kAtMid > zFar.z.kAtMid && zMid2.z.kAtMid > zFar.z.kAtMid && zMid2.z.kAtMid < zNear.z.kAtMid,
+    `k：珠海↔澳门 ${zNear.z.kAtMid.toFixed(4)} > 合肥↔东京 ${zMid.z.kAtMid.toFixed(4)} > 北京↔伦敦 ${zMid2.z.kAtMid.toFixed(4)} > 奥克兰↔马德里 ${zFar.z.kAtMid.toFixed(4)}`,
+  );
+  check(
+    '★ 收尾推近：最后一帧 k 回到 kNear（停在目标城市的近景）',
+    Math.abs(zFar.z.lastK - zFar.info.kNear) < 1e-6 && Math.abs(zFar.z.ratioLast - 0.86) < 0.005,
+    `lastK=${zFar.z.lastK.toFixed(6)}，kNear=${zFar.info.kNear.toFixed(6)}，收尾直径/短边=${zFar.z.ratioLast.toFixed(4)}`,
+  );
+  check(
+    '★ 缩放是平滑过渡：帧间 |Δk| 不超过整个幅度的 35%（无跳变）',
+    zFar.z.maxDk < 0.35 * (zFar.z.maxK - zFar.z.minK),
+    `max|Δk|=${zFar.z.maxDk.toExponential(3)}，总幅度 ${(zFar.z.maxK - zFar.z.minK).toFixed(4)}（占比 ${((zFar.z.maxDk / (zFar.z.maxK - zFar.z.minK)) * 100).toFixed(1)}%）`,
+  );
+  check(
+    '★ 缩放不是「瞬间切换」：有足够多的帧停在两端之间（拉远/推近各占 10% 时间轴）',
+    zFar.z.insideFrames >= 8,
+    `${zFar.z.insideFrames} / ${zFar.z.samples} 帧处于两端之间`,
+  );
+  check(
+    '缩放没有影响总时长（仍是 duration + holdMs = 6200ms）',
+    zFar.r.ms >= 5900 && zFar.r.ms <= 7100,
+    `实测 ${zFar.r.ms}ms`,
+  );
+
+  // ── 16b. 三个视口下「最远 = 短边 2/3」都要成立（kFar 随视口自动变）──
+  console.log('\n【16b】三个视口下的逼近/拉远');
+  for (const vp of viewports) {
+    await session.send('Emulation.setDeviceMetricsOverride', {
+      width: vp.w,
+      height: vp.h,
+      deviceScaleFactor: 1,
+      mobile: vp.w < 500,
+    });
+    await sleep(250);
+    const tag = `${vp.w}x${vp.h}`;
+    const far = await zoomRun('auckland', 'madrid', [
+      `12-zoom-far-cruise-${tag}`,
+      `13-zoom-far-arrived-${tag}`,
+    ]);
+    check(
+      `${vp.name}：远距离直径/短边 = 2/3（±2%），收尾回到 0.86`,
+      Math.abs(far.z.ratioMid - 2 / 3) / (2 / 3) < 0.02 && Math.abs(far.z.ratioLast - 0.86) < 0.01,
+      `中段 ${far.z.ratioMid.toFixed(4)}（半径 ${(far.z.kAtMid * far.z.Rbase).toFixed(1)}px / 短边 ${far.z.side}px）` +
+        `，收尾 ${far.z.ratioLast.toFixed(4)}`,
+    );
+    check(
+      `${vp.name}：拉远幅度 22.5%（±2%），kNear=${far.info.kNear.toFixed(4)} kFar=${far.info.kFar.toFixed(4)}`,
+      Math.abs(far.z.shrink - 0.225) < 0.02,
+      `实测 ${(far.z.shrink * 100).toFixed(2)}%（半径 ${(far.info.kNear * far.info.Rbase).toFixed(1)}px → ${(far.info.kFar * far.info.Rbase).toFixed(1)}px）`,
+    );
+    check(
+      `${vp.name}：缩放期间「正北朝上」判据依旧成立`,
+      far.r.summary.maxUpEast < 1e-6 && far.r.summary.minPoleGap > 0,
+      `max|up·east|=${fmt(far.r.summary.maxUpEast)}，min(南y−北y)=${far.r.summary.minPoleGap.toFixed(3)}px`,
+    );
+  }
+  await session.send('Emulation.setDeviceMetricsOverride', {
+    width: 1440,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await sleep(250);
+
+  // ── 16c. 像素级：把「画出来的球」量出来，而不是只信 view.R ──
+  console.log('\n【16c】像素级实测球面直径（纯红贴图 + 关掉边缘光，红盘边界 = 球轮廓）');
+  const discFar = await session.eval(
+    'window.__measureDisc({ atMs: 2500, fromId: "auckland", toId: "madrid" })',
+  );
+  check(
+    '★ 远距离飞行中段：像素实测直径 ÷ 视口短边 = 2/3（±3%）',
+    !!discFar.measuredPx && Math.abs(discFar.ratioMeasured - 2 / 3) / (2 / 3) < 0.03,
+    `实测 ${discFar.measuredPx ? discFar.measuredPx.toFixed(1) : 'n/a'}px / 短边 ${discFar.side}px = ` +
+      `${discFar.ratioMeasured ? discFar.ratioMeasured.toFixed(4) : 'n/a'}（几何值 ${discFar.expectedPx.toFixed(1)}px）`,
+  );
+  check(
+    '像素实测直径与几何直径 2R 一致（±2%），且左右对称（确实扫到了球）',
+    !!discFar.measuredPx
+      && Math.abs(discFar.measuredPx - discFar.expectedPx) / discFar.expectedPx < 0.02
+      && discFar.scan
+      && Math.abs(discFar.scan.leftGap - discFar.scan.rightGap) < 3,
+    discFar.scan
+      ? `实测 ${discFar.measuredPx.toFixed(1)}px vs 2R=${discFar.expectedPx.toFixed(1)}px，` +
+        `左 ${discFar.scan.leftGap.toFixed(1)}px / 右 ${discFar.scan.rightGap.toFixed(1)}px（扫描行 y=${discFar.scan.rowCss}）`
+      : '没有读到帧',
+  );
+  const discNear = await session.eval(
+    'window.__measureDisc({ atMs: 5400, fromId: "zhuhai", toId: "macau" })',
+  );
+  check(
+    '★ 近距离停留段：像素实测直径 ÷ 视口短边 ≈ 0.86（近景真的更大）',
+    !!discNear.measuredPx && Math.abs(discNear.ratioMeasured - 0.86) < 0.02,
+    `实测 ${discNear.measuredPx ? discNear.measuredPx.toFixed(1) : 'n/a'}px / 短边 ${discNear.side}px = ` +
+      `${discNear.ratioMeasured ? discNear.ratioMeasured.toFixed(4) : 'n/a'}（几何值 ${discNear.expectedPx.toFixed(1)}px）`,
+  );
+  check(
+    '像素实测：近景球比远景球大 22% 以上（逼近/拉远肉眼可辨）',
+    !!discNear.measuredPx && !!discFar.measuredPx && discNear.measuredPx > discFar.measuredPx * 1.22,
+    `${discNear.measuredPx ? discNear.measuredPx.toFixed(1) : 'n/a'}px（近，8.7km） vs ` +
+      `${discFar.measuredPx ? discFar.measuredPx.toFixed(1) : 'n/a'}px（远，19596km）`,
+  );
+  const zoomErrors = await session.eval('window.__errors');
+  check('逼近/拉远这一段没有未捕获异常', zoomErrors.length === 0, zoomErrors.join(' | ') || '无');
+
+  // ── 16d. 第一代（Canvas 2D 降级路径）也要跟着缩放 ──
+  // 2D 路径的海面圆盘原来是预渲染进底图的，R 一变就会错位；这里验它同样按距离反解。
+  console.log('\n【16d】Canvas 2D 降级路径下的逼近/拉远');
+  await session.eval(
+    `window.__c2dPending = (async () => {
+       const g = window.__makeGlobe({ forceCanvas2D: true });
+       const p = window.__runPairOn(g, window.__city('hefei'), window.__city('tokyo'));
+       const r = await p;
+       return { mode: g.rendererMode, z: r.summary.zoom, ms: r.ms };
+     })()`,
+    { awaitPromise: false },
+  );
+  await sleep(2600);
+  await shot('14-canvas2d-zoom-cruise-1440x900');
+  await sleep(1200);
+  await shot('15-canvas2d-zoom-arrived-1440x900');
+  const c2d = await session.eval('window.__c2dPending');
+  check(
+    '★ Canvas 2D 降级路径也按距离反解 k（中距离 ≈0.804，收尾回到 0.86）',
+    c2d.mode === 'canvas2d'
+      && Math.abs(c2d.z.ratioMid - zMid.z.ratioMid) < 0.02
+      && Math.abs(c2d.z.ratioLast - 0.86) < 0.01,
+    `mode=${c2d.mode} 中段 ${c2d.z.ratioMid.toFixed(4)}（WebGL 同距离 ${zMid.z.ratioMid.toFixed(4)}），收尾 ${c2d.z.ratioLast.toFixed(4)}，时长 ${c2d.ms}ms`,
+  );
+  check(
+    '2D 路径的缩放也平滑（max|Δk| 有上界）',
+    c2d.z.maxDk < 0.35 * (c2d.z.maxK - c2d.z.minK) && c2d.z.insideFrames >= 8,
+    `max|Δk|=${c2d.z.maxDk.toExponential(3)}，总幅度 ${(c2d.z.maxK - c2d.z.minK).toFixed(4)}，中间帧 ${c2d.z.insideFrames}`,
+  );
+  const c2dErrors = await session.eval('window.__errors');
+  check('2D 路径缩放没有未捕获异常', c2dErrors.length === 0, c2dErrors.join(' | ') || '无');
 } catch (err) {
   failed = 1;
   check(`测试装置异常：${err.message}`, false);
