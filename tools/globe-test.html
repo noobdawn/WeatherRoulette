@@ -451,59 +451,106 @@ window.__chinaRedProbe = async (atMs = 5400) => {
 };
 
 /**
- * 北极伪影扫描：相机停在极点上方，沿几条纬线各扫一圈。
- * 「风车条纹」= 沿纬线方向的高频起伏，所以取每个点与左右邻居均值的差（二阶差分），
- * 平滑的光照变化贡献很小，条纹会直接把 hf 顶起来。
+ * 北极伪影探针（要求 2 的验收装置）。
+ * 同一帧上截三张图：
+ *   A 正常实现（经线在高纬淡出）
+ *   B 关掉整个经纬网（grid=0）—— 参照底
+ *   C 关掉高纬淡出（gridPoleFade=0）—— 等价于修复前的表现
+ * 于是 A−B = 现在经纬网在极地的贡献，C−B = 修复前的贡献。
+ * 判据：极地 A−B ≈ 0（风车没了）、C−B 明显 > 0（能复现出风车）、
+ *       中纬 A−B 明显 > 0（经纬网在别处照常画着，不是整体删掉）。
+ * 顺带统计极冠的颜色分布，用来证明「没有糊成一坨白饼」。
  */
 window.__poleProbe = async (atMs = 5400) => {
   const from = window.__synth(0, 0, '赤道', 'Equator');
   const to = window.__synth(89.9, 0, '极点上方', 'OverPole'); // 相机纬度夹到 85
   const p = window.__runPair(from, to);
   await new Promise((r) => setTimeout(r, atMs));
-  const cap = refreshCapture();
-  const rings = [];
-  for (const lat of [72, 78, 82, 85, 87.5, 89]) {
-    const vals = [];
-    for (let lon = -180; lon < 180; lon += 3) {
-      const sc = globe.worldToScreen(lat, lon);
-      if (!sc || !sc.visible) continue;
-      if (Math.hypot(sc.nx, sc.ny) > 0.86) continue; // 避开边缘光
-      const c = px(cap, sc.x, sc.y, 3);
-      if (c) vals.push({ lon, c, lum: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] });
+  const view = globe.viewport;
+
+  const grab = (tune) => {
+    window.__setTuning(tune);
+    return globe.captureFrame();
+  };
+  const A = grab({ gridPoleFade: 1, grid: null });
+  const B = grab({ grid: 0 });
+  const C = grab({ gridPoleFade: 0, grid: null });
+  window.__setTuning({ gridPoleFade: 1, grid: null });
+
+  const lum = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const region = (lat0, lat1) => {
+    const out = [];
+    for (let lat = lat0; lat <= lat1; lat += 1) {
+      for (let lon = -180; lon < 180; lon += 1) {
+        const sc = globe.worldToScreen(lat, lon);
+        if (!sc || !sc.visible) continue;
+        if (Math.hypot(sc.nx, sc.ny) > 0.88) continue;
+        const a = px(A, sc.x, sc.y, 1);
+        const b = px(B, sc.x, sc.y, 1);
+        const c = px(C, sc.x, sc.y, 1);
+        if (!a || !b || !c) continue;
+        out.push({ lat, lon, a, b, c, lum: lum(a) });
+      }
     }
-    let hfSum = 0;
-    let hfMax = 0;
-    let hfN = 0;
-    for (let i = 1; i < vals.length - 1; i++) {
-      if (Math.abs(vals[i + 1].lon - vals[i - 1].lon - 6) > 1e-6) continue; // 跨接缝/空洞
-      const hf = Math.abs(vals[i].lum - (vals[i - 1].lum + vals[i + 1].lum) / 2);
-      hfSum += hf;
-      if (hf > hfMax) hfMax = hf;
-      hfN++;
+    return out;
+  };
+  const stat = (pts) => {
+    let maxNow = 0;
+    let maxBefore = 0;
+    let sumNow = 0;
+    let sumBefore = 0;
+    for (const p2 of pts) {
+      const dn = Math.max(
+        Math.abs(p2.a[0] - p2.b[0]),
+        Math.abs(p2.a[1] - p2.b[1]),
+        Math.abs(p2.a[2] - p2.b[2]),
+      );
+      const db = Math.max(
+        Math.abs(p2.c[0] - p2.b[0]),
+        Math.abs(p2.c[1] - p2.b[1]),
+        Math.abs(p2.c[2] - p2.b[2]),
+      );
+      if (dn > maxNow) maxNow = dn;
+      if (db > maxBefore) maxBefore = db;
+      sumNow += dn;
+      sumBefore += db;
     }
-    const lums = vals.map((v) => v.lum);
-    const mean = lums.length ? lums.reduce((a, b) => a + b, 0) / lums.length : 0;
-    const std = lums.length
-      ? Math.sqrt(lums.reduce((a, b) => a + (b - mean) * (b - mean), 0) / lums.length)
-      : 0;
-    // 「糊成白饼」的反面：沿纬线平均色在**经向**（不同纬度之间）还要有结构
-    const meanRgb = [0, 1, 2].map((ch) =>
-      vals.length ? Math.round(vals.reduce((a, v) => a + v.c[ch], 0) / vals.length) : 0,
-    );
-    rings.push({
-      lat,
-      n: vals.length,
-      hfMean: hfN ? hfSum / hfN : 0,
-      hfMax,
-      std,
-      meanLum: mean,
-      meanRgb,
-      // 靠近极点的一圈，用于「冰盖形状还在不在」的肉眼核对
-      samples: vals.filter((_, i) => i % 10 === 0).map((v) => [v.lon, ...v.c]),
-    });
-  }
+    return {
+      n: pts.length,
+      maxNow,
+      meanNow: pts.length ? sumNow / pts.length : 0,
+      maxBefore,
+      meanBefore: pts.length ? sumBefore / pts.length : 0,
+    };
+  };
+
+  const polarPts = region(78, 89);
+  const midPts = region(30, 50);
+  const lums = polarPts.map((x) => x.lum);
+  const bright = lums.filter((v) => v > 150).length;
+  const dark = lums.filter((v) => v < 80).length;
+  const mean = lums.length ? lums.reduce((x, y) => x + y, 0) / lums.length : 0;
+  const std = lums.length
+    ? Math.sqrt(lums.reduce((x, y) => x + (y - mean) * (y - mean), 0) / lums.length)
+    : 0;
+  const iceCap = {
+    n: lums.length,
+    brightFrac: lums.length ? bright / lums.length : 0,
+    darkFrac: lums.length ? dark / lums.length : 0,
+    meanLum: mean,
+    stdLum: std,
+    minLum: lums.length ? Math.min(...lums) : 0,
+    maxLum: lums.length ? Math.max(...lums) : 0,
+  };
+  const result = {
+    polar: stat(polarPts),
+    mid: stat(midPts),
+    iceCap,
+    view: { R: view.R, cx: view.cx, cy: view.cy, w: view.w, h: view.h },
+    info: { rendererMode: globe.rendererMode, aniso: globe.rendererInfo.aniso },
+  };
   await p;
-  return { rings, view: globe.viewport };
+  return result;
 };
 
 /** 临时改渲染调参（做「修复前/修复后」对比）。 */

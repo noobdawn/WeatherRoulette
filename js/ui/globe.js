@@ -280,13 +280,15 @@ function ringsToVec(rings) {
 
 /** 经纬网（每 30°），只在首次使用时构建。 */
 let _gratCache = null;
+/** 经线在极点会汇聚成「风车」，两条渲染路径都只画到 ±76°。 */
+const GRAT_MERIDIAN_MAX_LAT = 76;
 function graticuleVec() {
   if (_gratCache) return _gratCache;
   const meridians = [];
   const parallels = [];
   for (let lon = -180; lon < 180; lon += 30) {
     const pts = [];
-    for (let lat = -90; lat <= 90; lat += 5) pts.push([lon, lat]);
+    for (let lat = -GRAT_MERIDIAN_MAX_LAT; lat <= GRAT_MERIDIAN_MAX_LAT; lat += 5) pts.push([lon, lat]);
     meridians.push(ringsToVec([pts])[0]);
   }
   for (let lat = -60; lat <= 60; lat += 30) {
@@ -500,8 +502,7 @@ const TUNE = {
   bump: 2.6, // 法线扰动强度（法线贴图本身很平，放大后山体才有立体感）
   oceanBump: 0.06, // 海洋压平（贴图里海洋已经是 (0,0,1)，这里再兜一层）
   country: 0.17, // 国家淡色蒙版强度（「淡淡的」由它决定）
-  chinaBoost: 2.8, // 中国单独的蒙版倍率：0.17 × 2.8 ≈ 0.48，肉眼一眼能看出红
-  polarPx: 2.6, // 极地环向平滑半径（屏幕像素）
+  chinaBoost: 3.6, // 中国单独的蒙版倍率：0.17 × 3.6 ≈ 0.45，肉眼一眼能看出红
   poleBumpFade: 1.0, // 极地法线扰动淡出（1 = 极点完全淡出）
   grid: 0.10, // 经纬网
   gridPx: 1.15, // 经纬网线宽（CSS 像素）
@@ -615,43 +616,17 @@ uniform float uGridPx;
 uniform float uR;          // 球半径（CSS 像素），用来把经纬网线宽固定成屏幕像素
 uniform float uExposure;
 uniform float uSaturation;
-uniform float uPolarStrength;  // 极地环向平滑强度（0 = 关掉，自动化测试用来做前后对比）
-uniform float uPolarPx;        // 极地环向平滑半径（屏幕像素）
 uniform float uPoleBumpFade;   // 极地法线扰动淡出强度
+uniform float uGridPoleFade;   // 经线在高纬淡出（0 = 关，用来复现修复前的北极「风车」）
 uniform float uChinaId;        // 中国在 countries.png 里的编号（取自 countries.json 的 chinaIndex）
 uniform float uChinaBoost;     // 中国的蒙版强度倍率（别的国家仍保持「淡淡」）
-uniform float uDebugPure;      // 调试：只输出地表反照率，用来定位伪影来源
 
 const float PI = 3.14159265359;
 
 void main(){
   vec3 nGeo = normalize(vN);
   vec3 albedo = texture2D(uAlbedo, vUv).rgb;
-
-  // ── 极地环向平滑：治「北极风车」────────────────────────────
-  // 等距圆柱贴图在极点被挤成一圈：网格每个楔形各吃掉一段 u，屏幕上就成了放射状条纹
-  // （越靠极点楔形越宽，因为纬线周长 ∝ cos(lat)）。
-  // 这里沿**纬线方向**做一次局部平均，半径 = 「一个屏幕像素对应的经度跨度」× 系数：
-  //  · 低纬：窗口小到等于没做，西伯利亚海岸线的细节一点不丢；
-  //  · 逼近极点：纬线周长趋近 0，同样的屏幕半径换算过去就是整圈平均，
-  //    自动退化成「极冠」，不会在极点留下任何方向性结构。
   float sinAbs = abs(nGeo.y);
-  float polarK = smoothstep(0.90, 0.975, sinAbs) * uPolarStrength;
-  if (polarK > 0.002) {
-    float cosLat = max(sqrt(max(1.0 - nGeo.y * nGeo.y, 0.0)), 0.004);
-    float uw = min(uPolarPx / (6.2831853 * max(uR, 1.0) * cosLat), 0.5);
-    vec3 acc = albedo
-      + texture2D(uAlbedo, vec2(fract(vUv.x + uw), vUv.y)).rgb
-      + texture2D(uAlbedo, vec2(fract(vUv.x - uw), vUv.y)).rgb
-      + texture2D(uAlbedo, vec2(fract(vUv.x + uw * 0.5), vUv.y)).rgb
-      + texture2D(uAlbedo, vec2(fract(vUv.x - uw * 0.5), vUv.y)).rgb;
-    albedo = mix(albedo, acc * 0.2, polarK);
-  }
-
-  if (uDebugPure > 0.5) {
-    gl_FragColor = vec4(albedo, 1.0);
-    return;
-  }
 
   // ── 国家编号 + 陆地遮罩（countries.png 是 8bit 索引图，必须 NEAREST 采样）──
   float id8 = 0.0;
@@ -722,6 +697,9 @@ void main(){
   }
 
   // ── 经纬网（解析式，不用导数扩展）──
+  // ⚠️ 经线必须在高纬淡出：12 条经线全都汇聚到极点，屏幕上就是一个「风车」，
+  //    这正是之前北极那圈放射状条纹的来源（不是贴图被挤，贴图本身是干净的）。
+  //    纬线不汇聚，照常画。
   if (uGrid > 0.001) {
     float latDeg = degrees(asin(clamp(nGeo.y, -1.0, 1.0)));
     float lonDeg = degrees(atan(nGeo.x, nGeo.z));
@@ -730,9 +708,10 @@ void main(){
     float d1 = min(m1, 30.0 - m1);
     float m2 = mod(lonDeg, 30.0);
     float d2 = min(m2, 30.0 - m2) * max(cos(radians(latDeg)), 0.06);
-    float g = max(1.0 - smoothstep(0.0, max(w, 0.05), d1),
-                  1.0 - smoothstep(0.0, max(w, 0.05), d2));
-    col = mix(col, vec3(0.78, 0.88, 1.0), g * uGrid);
+    float gLat = 1.0 - smoothstep(0.0, max(w, 0.05), d1);
+    float gLon = 1.0 - smoothstep(0.0, max(w, 0.05), d2);
+    gLon *= 1.0 - uGridPoleFade * smoothstep(0.90, 0.972, sinAbs);   // lat 64° → 76° 淡出经线
+    col = mix(col, vec3(0.78, 0.88, 1.0), max(gLat, gLon) * uGrid);
   }
 
   // ── 边缘光 + 一点边缘减光，免得看着像贴纸 ──
@@ -921,7 +900,7 @@ class GLRenderer {
         'uDiffuse', 'uAmbient', 'uRim', 'uRimPower', 'uSpec', 'uSpecPower',
         'uBump', 'uOceanBump', 'uCountry', 'uGrid', 'uGridPx',
         'uExposure', 'uSaturation',
-        'uPolarStrength', 'uPolarPx', 'uPoleBumpFade', 'uChinaId', 'uChinaBoost', 'uDebugPure',
+        'uPoleBumpFade', 'uChinaId', 'uChinaBoost', 'uGridPoleFade',
       ], ['aPos', 'aUv']);
       this.globe.prog = globe;
 
@@ -1135,14 +1114,12 @@ class GLRenderer {
     gl.uniform1f(P.u.uGridPx, TUNE.gridPx);
     gl.uniform1f(P.u.uExposure, TUNE.exposure);
     gl.uniform1f(P.u.uSaturation, TUNE.saturation);
-    // 极地环向平滑 / 中国蒙版倍率：可由调试接口临时覆盖（自动化测试做前后对比用）
+    // 极地法线淡出 / 经线淡出 / 中国蒙版倍率：可由调试接口临时覆盖（自动化测试做前后对比用）
     const tune = this.tuning || {};
-    gl.uniform1f(P.u.uPolarStrength, tune.polarStrength == null ? 1 : tune.polarStrength);
-    gl.uniform1f(P.u.uPolarPx, tune.polarPx == null ? TUNE.polarPx : tune.polarPx);
     gl.uniform1f(P.u.uPoleBumpFade, tune.poleBumpFade == null ? TUNE.poleBumpFade : tune.poleBumpFade);
     gl.uniform1f(P.u.uChinaId, tune.chinaId == null ? 1 : tune.chinaId);
     gl.uniform1f(P.u.uChinaBoost, tune.chinaBoost == null ? TUNE.chinaBoost : tune.chinaBoost);
-    gl.uniform1f(P.u.uDebugPure, tune.debugPure ? 1 : 0);
+    gl.uniform1f(P.u.uGridPoleFade, tune.gridPoleFade == null ? 1 : tune.gridPoleFade);
     if (tune.spec != null) gl.uniform1f(P.u.uSpec, tune.spec);
     if (tune.rim != null) gl.uniform1f(P.u.uRim, tune.rim);
     if (tune.bump != null) gl.uniform1f(P.u.uBump, tune.bump);
@@ -1480,7 +1457,31 @@ export class Globe {
 
   /** 调试覆盖：临时改渲染调参（自动化测试做「修复前 / 修复后」对比用）。 */
   setTuning(patch) {
-    if (this._gl) this._gl.tuning = { ...this._gl.tuning, ...(patch || {}) };
+    // 上下文还没建出来时先存着，等 _ensureGL 建好后合并进去（否则静默失效）
+    this._pendingTuning = { ...(this._pendingTuning || {}), ...(patch || {}) };
+    if (this._gl) this._gl.tuning = { ...this._gl.tuning, ...this._pendingTuning };
+  }
+
+  /**
+   * 调试：丢掉已上传的贴图并允许换上传选项（例如关掉 mipmap），
+   * 用来定位「过滤相关」的渲染伪影。下次 showTransition 会重新上传。
+   */
+  debugReloadTextures(opts = {}) {
+    this._texOpts = { ...(this._texOpts || {}), ...opts };
+    const gl = this._gl;
+    if (gl && gl.gl && gl.textures) {
+      for (const k of ['albedo', 'normal', 'countries', 'palette']) {
+        const t = gl.textures[k];
+        if (t) {
+          try { gl.gl.deleteTexture(t); } catch { /* 忽略 */ }
+        }
+      }
+      gl.setTextures({});
+    }
+    this._tex = null;
+    this._texPromise = null;
+    this._texState = 'idle';
+    return this._texOpts;
   }
 
   /** 屏幕坐标 → 该点的纹理 uv（调试用，配合 sampleScreen 核对贴图方向）。 */
@@ -1710,11 +1711,12 @@ export class Globe {
         const gl = this._gl;
         if (!gl || !gl.ok) return null;
         const tex = {};
-        const up = gl.uploadImage(albedo, { maxW: 2048, maxH: 1024, mipmap: true });
+        const mip = !(this._texOpts && this._texOpts.noMipmap);
+        const up = gl.uploadImage(albedo, { maxW: 2048, maxH: 1024, mipmap: mip });
         tex.albedo = up.tex;
         tex.albedoSize = [up.w, up.h];
         if (normal) {
-          const n = gl.uploadImage(normal, { maxW: 2048, maxH: 1024, mipmap: true });
+          const n = gl.uploadImage(normal, { maxW: 2048, maxH: 1024, mipmap: mip });
           tex.normal = n.tex;
         }
         if (countries) {
@@ -1899,6 +1901,7 @@ export class Globe {
         return null;
       }
       this._gl = gl;
+      if (this._pendingTuning) gl.tuning = { ...gl.tuning, ...this._pendingTuning };
       return gl;
     } catch (err) {
       warn('WebGL 初始化异常，改用矢量地球：', err && err.message ? err.message : err);

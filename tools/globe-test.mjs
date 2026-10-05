@@ -801,6 +801,98 @@ try {
     lostErrors.length === 0,
     lostErrors.join(' | ') || '无',
   );
+
+  // ── 14. 中国必须是红的（老板要求，像素级验证）──────────────
+  console.log('\n【14】中国红色：纹素级 + 像素级');
+  const cnTex = await session.eval(`({
+    bj: window.__countryIdAt(39.9042, 116.4074),
+    sh: window.__countryIdAt(31.2304, 121.4737),
+    um: window.__countryIdAt(43.8256, 87.6168),
+    name1: window.__countryNameOf(window.__countryIdAt(39.9042, 116.4074)),
+    pal1: window.__paletteAt(1),
+  })`);
+  check(
+    '北京 / 上海 / 乌鲁木齐三点在 countries.png 里都是编号 1，且编号 1 = China',
+    cnTex.bj === 1 && cnTex.sh === 1 && cnTex.um === 1 && cnTex.name1 === 'China',
+    `北京=${cnTex.bj} 上海=${cnTex.sh} 乌鲁木齐=${cnTex.um} names[1]=${JSON.stringify(cnTex.name1)}`,
+  );
+  check(
+    'palette 编号 1 是明显的红（R 显著大于 G / B）',
+    cnTex.pal1[0] > cnTex.pal1[1] * 1.8 && cnTex.pal1[0] > cnTex.pal1[2] * 1.8,
+    `palette[1]=${JSON.stringify(cnTex.pal1)}`,
+  );
+  const chinaIdUsed = await session.eval('window.__globe.rendererInfo.chinaId');
+  check(
+    'globe 用的是 countries.json 里的 chinaIndex（不是硬编码）',
+    chinaIdUsed === 1,
+    `rendererInfo.chinaId=${chinaIdUsed}`,
+  );
+
+  const red = await session.eval('window.__chinaRedProbe()');
+  const cn = red.groups.find((g) => g.name === 'China');
+  const neighbors = red.groups.filter((g) => g.name !== 'China' && g.n >= 5);
+  const worstNeighbor = neighbors.reduce(
+    (a, b) => (b.redShift > a.redShift ? b : a),
+    neighbors[0] || { redShift: 0, name: '无' },
+  );
+  check(
+    '★ 像素级：中国对相邻国家同纬度对比，红移显著（redShift ≥ 1.35）',
+    !!cn && cn.redShift >= 1.35,
+    cn
+      ? `中国 redShift=${cn.redShift.toFixed(3)}（R/G ${cn.rg.toFixed(3)} vs 贴图本色 ${cn.texRG.toFixed(3)}，n=${cn.n}）`
+      : '没采到中国像素',
+  );
+  check(
+    '★ 相邻国家都不偏红（最高者 redShift ≤ 1.15），中国至少是它的 1.2 倍',
+    !!cn && worstNeighbor.redShift <= 1.15 && cn.redShift >= worstNeighbor.redShift * 1.2,
+    `最高邻国 ${worstNeighbor.name} redShift=${worstNeighbor.redShift.toFixed(3)}；中国 ${cn ? cn.redShift.toFixed(3) : 'n/a'}`,
+  );
+  check(
+    '对比覆盖到多个邻国，样本量够',
+    neighbors.length >= 3 && red.total >= 60,
+    `${neighbors.length} 个邻国参与对比（${neighbors.map((g) => `${g.name}×${g.n}`).join(', ')}），总采样 ${red.total}`,
+  );
+  check(
+    '中国样例像素：渲染结果比同点贴图更红',
+    !!cn && red.samples.length >= 3 && red.samples.every((x) => x.rendered[0] > x.texel[0] * 1.02),
+    red.samples
+      .slice(0, 4)
+      .map((x) => `(${x.lat},${x.lon}) 渲染[${x.rendered.slice(0, 3)}] 贴图[${x.texel.slice(0, 3)}]`)
+      .join(' / '),
+  );
+
+  // ── 15. 北极「风车」伪影 ──────────────────────────────────
+  console.log('\n【15】北极风车伪影：经线必须在高纬淡出');
+  const pole = await session.eval('window.__poleProbe()');
+  check(
+    '★ 极地（lat 78~89）经纬网的贡献恒为 0：看不出任何放射状条纹',
+    pole.polar.n > 1000 && pole.polar.maxNow === 0,
+    `${pole.polar.n} 个采样点，max|A−B| = ${pole.polar.maxNow}，mean = ${pole.polar.meanNow.toFixed(4)}（A=正常，B=关掉经纬网）`,
+  );
+  check(
+    '★ 同一判据能抓到修复前的伪影（关掉高纬淡出时 max|C−B| ≥ 8）',
+    pole.polar.maxBefore >= 8,
+    `修复前 max|C−B| = ${pole.polar.maxBefore}，mean = ${pole.polar.meanBefore.toFixed(3)}（C=gridPoleFade:0）`,
+  );
+  check(
+    '中纬度（lat 30~50）经纬网照常可见，不是整体删掉',
+    pole.mid.n > 1000 && pole.mid.maxNow >= 8,
+    `${pole.mid.n} 个采样点，max|A−B| = ${pole.mid.maxNow}，mean = ${pole.mid.meanNow.toFixed(3)}`,
+  );
+  check(
+    '★ 北极没有糊成一坨白饼：极冠仍有冰/海对比与丰富结构',
+    pole.iceCap.brightFrac > 0.03
+      && pole.iceCap.darkFrac > 0.03
+      && pole.iceCap.stdLum > 25
+      && pole.iceCap.maxLum > 200
+      && pole.iceCap.minLum < 60,
+    `极冠 ${pole.iceCap.n} 点：亮部(>150) ${(pole.iceCap.brightFrac * 100).toFixed(1)}% / 暗部(<80) ${(pole.iceCap.darkFrac * 100).toFixed(1)}% / 亮度 std=${pole.iceCap.stdLum.toFixed(1)} ∈ [${pole.iceCap.minLum.toFixed(0)}, ${pole.iceCap.maxLum.toFixed(0)}]`,
+  );
+  check(
+    '探针跑在 WebGL 路径上',
+    pole.info.rendererMode === 'webgl',
+    `rendererMode=${pole.info.rendererMode} aniso=${pole.info.aniso}`,
+  );
 } catch (err) {
   failed = 1;
   check(`测试装置异常：${err.message}`, false);

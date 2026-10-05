@@ -73,6 +73,7 @@ export const IMAGES_DIR = 'assets/images';
  *   normal.jpg    从地形起伏导出的法线贴图，供实时山体光影
  *   countries.png 8bit 国家编号图，供淡色蒙版
  *   palette.png   256×1 调色板，把编号映射成低饱和颜色
+ *   countries.json 编号 → 国名，以及 chinaIndex（中国的编号，着色器据此保证中国是红色）
  */
 export const GLOBE_TEXTURES_DIR = 'assets/globe';
 
