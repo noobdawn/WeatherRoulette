@@ -48,7 +48,10 @@
       </div>
     </main>
 
-    <!-- 音乐开关：右上角纯图标，默认很淡（opacity .35），hover/focus/tap 才到 1 -->
+    <!-- 播放控制：两个角落小按钮，默认很淡（opacity .35），hover/focus/tap 才到 1。
+         注意：暂停**只有**点 #btn-pause 才会触发——点画面任意处（空白或文字）都不暂停，
+         这是老板明确要求的行为，不要在 #app 上加 click 监听。 -->
+    <button id="btn-pause" type="button" aria-label="暂停播报" aria-pressed="false">⏸</button>
     <button id="btn-music" type="button" aria-label="背景音乐开关" aria-pressed="true">🎵</button>
 
     <!-- 这里没有「开始播报」遮罩：页面加载后自动开始播报。

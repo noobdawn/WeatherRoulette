@@ -747,53 +747,93 @@ if (CLICK_START) {
       check('「下一个」按钮生效', false, err.message);
     }
   } else {
-    // 极简版没有按钮：验证「点画面暂停/继续」这个唯一保留的交互
-    const before = await session.eval(`({
+    // 极简版：暂停**只能**点左上角 #btn-pause，点画面空白或文字都不能暂停
+    // （老板明确要求，所以 #app 上不再挂 click 监听）
+    const readPaused = () => session.eval(`({
       paused: document.getElementById(${JSON.stringify(P.app)}).classList.contains('is-paused'),
+      btnPressed: document.getElementById('btn-pause')?.getAttribute('aria-pressed') ?? null,
+      btnText: document.getElementById('btn-pause')?.textContent?.trim() ?? null,
       city: ${CITY},
     })`);
-    // 用「真实坐标点击」而不是 element.click()：能顺带验证遮罩隐藏后不再拦截点击
-    const box = await session.eval(`(() => {
-      const b = document.getElementById(${JSON.stringify(P.app)});
-      const r = b.getBoundingClientRect();
-      return { x: Math.round(r.left + r.width * 0.22), y: Math.round(r.top + r.height * 0.5) };
+
+    const state0 = await readPaused();
+    check('页面上存在专用暂停按钮 #btn-pause', state0.btnText !== null,
+      `按钮文字="${state0.btnText}" aria-pressed=${state0.btnPressed}`);
+
+    // ① 点画面正中间（文字附近）→ 不应暂停
+    const center = await session.eval(`(() => {
+      const r = document.getElementById(${JSON.stringify(P.cityZh)}).getBoundingClientRect();
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
     })()`);
-    const hitTest = await session.eval(
-      `document.elementFromPoint(${box.x}, ${box.y})?.id || document.elementFromPoint(${box.x}, ${box.y})?.tagName`,
+    const centerHit = await session.eval(
+      `document.elementFromPoint(${center.x}, ${center.y})?.id`,
     );
-    console.log(`      坐标点击 (${box.x},${box.y}) 命中的元素：${hitTest}`);
     for (const type of ['mousePressed', 'mouseReleased']) {
       await session.send('Input.dispatchMouseEvent', {
-        type, x: box.x, y: box.y, button: 'left', clickCount: 1,
+        type, x: center.x, y: center.y, button: 'left', clickCount: 1,
+      });
+    }
+    await sleep(900);
+    const afterCityClick = await readPaused();
+    check('点城市文字不暂停', afterCityClick.paused === false && !state0.paused,
+      `命中 #${centerHit}，is-paused: ${state0.paused} → ${afterCityClick.paused}`);
+
+    // ② 点画面左上角空白（不压到按钮）→ 不应暂停
+    const blank = await session.eval(`(() => {
+      const b = document.getElementById(${JSON.stringify(P.app)}).getBoundingClientRect();
+      return { x: Math.round(b.left + b.width * 0.5), y: Math.round(b.top + b.height * 0.08) };
+    })()`);
+    const blankHit = await session.eval(
+      `document.elementFromPoint(${blank.x}, ${blank.y})?.id || document.elementFromPoint(${blank.x}, ${blank.y})?.tagName`,
+    );
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await session.send('Input.dispatchMouseEvent', {
+        type, x: blank.x, y: blank.y, button: 'left', clickCount: 1,
+      });
+    }
+    await sleep(900);
+    const afterBlankClick = await readPaused();
+    check('点空白处不暂停', afterBlankClick.paused === false,
+      `命中 ${blankHit}，is-paused=${afterBlankClick.paused}`);
+
+    // ③ 点专用按钮 → 必须暂停
+    const btnBox = await session.eval(`(() => {
+      const r = document.getElementById('btn-pause').getBoundingClientRect();
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), w: Math.round(r.width), h: Math.round(r.height) };
+    })()`);
+    check('暂停按钮热区 ≥ 56px（适合小手）', btnBox.w >= 56 && btnBox.h >= 56,
+      `${btnBox.w}×${btnBox.h}`);
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await session.send('Input.dispatchMouseEvent', {
+        type, x: btnBox.x, y: btnBox.y, button: 'left', clickCount: 1,
       });
     }
     await sleep(1000);
-    const afterPause = await session.eval(`({
-      paused: document.getElementById(${JSON.stringify(P.app)}).classList.contains('is-paused'),
-      city: ${CITY},
-    })`);
-    check('点一下画面进入暂停态', afterPause.paused === true && !before.paused,
-      `is-paused: ${before.paused} → ${afterPause.paused}（命中元素 ${hitTest}）`);
+    const afterBtn = await readPaused();
+    check('点专用暂停按钮才暂停', afterBtn.paused === true,
+      `is-paused: ${afterBlankClick.paused} → ${afterBtn.paused}`);
+    check('暂停按钮状态已同步（图标变 ▶ / aria-pressed=true）',
+      afterBtn.btnPressed === 'true' && afterBtn.btnText === '▶',
+      `text="${afterBtn.btnText}" aria-pressed=${afterBtn.btnPressed}`);
+
     // 暂停后城市不应再自动切换
     await sleep(6000);
-    const stillPaused = await session.eval(`({
-      paused: document.getElementById(${JSON.stringify(P.app)}).classList.contains('is-paused'),
-      city: ${CITY},
-    })`);
-    check('暂停期间城市不再自动切换', stillPaused.paused === true && stillPaused.city === afterPause.city,
-      `${afterPause.city} → ${stillPaused.city}`);
+    const stillPaused = await readPaused();
+    check('暂停期间城市不再自动切换', stillPaused.paused === true && stillPaused.city === afterBtn.city,
+      `${afterBtn.city} → ${stillPaused.city}`);
 
-    // 再点一下恢复
+    // ④ 再点一次按钮恢复
     for (const type of ['mousePressed', 'mouseReleased']) {
       await session.send('Input.dispatchMouseEvent', {
-        type, x: box.x, y: box.y, button: 'left', clickCount: 1,
+        type, x: btnBox.x, y: btnBox.y, button: 'left', clickCount: 1,
       });
     }
     await sleep(1200);
-    const resumed = await session.eval(
-      `document.getElementById(${JSON.stringify(P.app)}).classList.contains('is-paused')`,
-    );
-    check('再点一下画面恢复播放', resumed === false, `is-paused=${resumed}`);
+    const resumed = await readPaused();
+    check('再点按钮恢复播放', resumed.paused === false, `is-paused=${resumed.paused}`);
+    check('恢复后按钮图标变回 ⏸',
+      resumed.btnPressed === 'false' && resumed.btnText === '⏸',
+      `text="${resumed.btnText}" aria-pressed=${resumed.btnPressed}`);
 
     // 批量抽查多张壁纸下的文字配色决策：任何一张都不该出现"两边看不清"
     console.log('      批量抽查壁纸文字配色（每城记录一个决策）……');

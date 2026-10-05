@@ -499,7 +499,10 @@ const TUNE = {
   specPower: 34.0,
   bump: 2.6, // 法线扰动强度（法线贴图本身很平，放大后山体才有立体感）
   oceanBump: 0.06, // 海洋压平（贴图里海洋已经是 (0,0,1)，这里再兜一层）
-  country: 0.17, // 国家淡色蒙版强度
+  country: 0.17, // 国家淡色蒙版强度（「淡淡的」由它决定）
+  chinaBoost: 2.8, // 中国单独的蒙版倍率：0.17 × 2.8 ≈ 0.48，肉眼一眼能看出红
+  polarPx: 2.6, // 极地环向平滑半径（屏幕像素）
+  poleBumpFade: 1.0, // 极地法线扰动淡出（1 = 极点完全淡出）
   grid: 0.10, // 经纬网
   gridPx: 1.15, // 经纬网线宽（CSS 像素）
   exposure: 0.98,
@@ -612,12 +615,43 @@ uniform float uGridPx;
 uniform float uR;          // 球半径（CSS 像素），用来把经纬网线宽固定成屏幕像素
 uniform float uExposure;
 uniform float uSaturation;
+uniform float uPolarStrength;  // 极地环向平滑强度（0 = 关掉，自动化测试用来做前后对比）
+uniform float uPolarPx;        // 极地环向平滑半径（屏幕像素）
+uniform float uPoleBumpFade;   // 极地法线扰动淡出强度
+uniform float uChinaId;        // 中国在 countries.png 里的编号（取自 countries.json 的 chinaIndex）
+uniform float uChinaBoost;     // 中国的蒙版强度倍率（别的国家仍保持「淡淡」）
+uniform float uDebugPure;      // 调试：只输出地表反照率，用来定位伪影来源
 
 const float PI = 3.14159265359;
 
 void main(){
   vec3 nGeo = normalize(vN);
   vec3 albedo = texture2D(uAlbedo, vUv).rgb;
+
+  // ── 极地环向平滑：治「北极风车」────────────────────────────
+  // 等距圆柱贴图在极点被挤成一圈：网格每个楔形各吃掉一段 u，屏幕上就成了放射状条纹
+  // （越靠极点楔形越宽，因为纬线周长 ∝ cos(lat)）。
+  // 这里沿**纬线方向**做一次局部平均，半径 = 「一个屏幕像素对应的经度跨度」× 系数：
+  //  · 低纬：窗口小到等于没做，西伯利亚海岸线的细节一点不丢；
+  //  · 逼近极点：纬线周长趋近 0，同样的屏幕半径换算过去就是整圈平均，
+  //    自动退化成「极冠」，不会在极点留下任何方向性结构。
+  float sinAbs = abs(nGeo.y);
+  float polarK = smoothstep(0.90, 0.975, sinAbs) * uPolarStrength;
+  if (polarK > 0.002) {
+    float cosLat = max(sqrt(max(1.0 - nGeo.y * nGeo.y, 0.0)), 0.004);
+    float uw = min(uPolarPx / (6.2831853 * max(uR, 1.0) * cosLat), 0.5);
+    vec3 acc = albedo
+      + texture2D(uAlbedo, vec2(fract(vUv.x + uw), vUv.y)).rgb
+      + texture2D(uAlbedo, vec2(fract(vUv.x - uw), vUv.y)).rgb
+      + texture2D(uAlbedo, vec2(fract(vUv.x + uw * 0.5), vUv.y)).rgb
+      + texture2D(uAlbedo, vec2(fract(vUv.x - uw * 0.5), vUv.y)).rgb;
+    albedo = mix(albedo, acc * 0.2, polarK);
+  }
+
+  if (uDebugPure > 0.5) {
+    gl_FragColor = vec4(albedo, 1.0);
+    return;
+  }
 
   // ── 国家编号 + 陆地遮罩（countries.png 是 8bit 索引图，必须 NEAREST 采样）──
   float id8 = 0.0;
@@ -640,8 +674,9 @@ void main(){
   if (uHasNormal > 0.5) {
     vec3 nt = texture2D(uNormalMap, vUv).rgb * 2.0 - 1.0;
     float k = mix(uOceanBump, 1.0, land);   // 海洋压平，不出现假山
-    // 极地附近等距圆柱的横向拉伸会把法线放大成「风车」条纹，这里把扰动淡出
-    k *= 1.0 - 0.82 * smoothstep(0.78, 0.97, abs(nGeo.y));
+    // 极地附近等距圆柱的横向拉伸会把法线放大成「风车」条纹，这里把扰动淡出。
+    // 只淡出、不整体抹平：低纬山体的立体感一点不动。
+    k *= 1.0 - uPoleBumpFade * smoothstep(0.78, 0.985, abs(nGeo.y));
     nt.xy *= uBump * k;
     vec3 east = normalize(vec3(nGeo.z, 0.0, -nGeo.x) + vec3(1e-6, 0.0, 0.0));
     vec3 northT = normalize(cross(nGeo, east));
@@ -673,11 +708,14 @@ void main(){
   // ── 国家淡色蒙版 ──
   // palette 用 NEAREST 采样（编号之间插值会出脏色）；这里把调色板归一化到
   // 单位亮度再乘上去，所以「淡」的程度只由 uCountry 决定，不会顺带压暗地表。
+  // 中国额外给一个倍率：老板要「中国是红的」，但别的国家仍要保持淡淡的色差，
+  // 所以不动全局强度、只给中国单独加权（编号取自 countries.json 的 chinaIndex）。
   if (uHasCountry > 0.5) {
     vec3 tint = texture2D(uPalette, vec2((id8 + 0.5) / 256.0, 0.5)).rgb;
     float tl = max(dot(tint, vec3(0.2126, 0.7152, 0.0722)), 0.12);
     tint /= tl;
-    float amt = uCountry * land;
+    float isChina = 1.0 - step(0.5, abs(id8 - uChinaId));
+    float amt = uCountry * land * mix(1.0, uChinaBoost, isChina);
     col = mix(col, col * tint, amt);
     // 国界：索引发生跳变的地方描一道深色细线（贴图里也烘了国界，这里只做加强）
     col *= mix(1.0, 0.94, amt);
@@ -823,6 +861,8 @@ class GLRenderer {
     this.info = null;
     this._frame = null;
     this._lost = false;
+    this.tuning = {}; // 调试覆盖项（极地平滑半径、中国倍率…），生产路径走 TUNE
+    this.aniso = 0; // 实际启用的各向异性过滤倍率（0 = 扩展不可用）
     this._flat = new Uint8Array(256 * 4); // 纯白兜底贴图（Uint8Array：WebGL1 的 texImage2D 不接受 Float32Array）
     this._flat.fill(255);
     this._init();
@@ -881,6 +921,7 @@ class GLRenderer {
         'uDiffuse', 'uAmbient', 'uRim', 'uRimPower', 'uSpec', 'uSpecPower',
         'uBump', 'uOceanBump', 'uCountry', 'uGrid', 'uGridPx',
         'uExposure', 'uSaturation',
+        'uPolarStrength', 'uPolarPx', 'uPoleBumpFade', 'uChinaId', 'uChinaBoost', 'uDebugPure',
       ], ['aPos', 'aUv']);
       this.globe.prog = globe;
 
@@ -954,6 +995,20 @@ class GLRenderer {
     }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // 各向异性过滤：球面掠射角（尤其两极附近）像素覆盖的纹素区域被拉得很长，
+    // 只按 max(du,dv) 选 mip 会把整片糊掉、还会让相邻三角形的 mip 选择跳变出条纹。
+    if (mipmap && !nearest) {
+      const ext =
+        gl.getExtension('EXT_texture_filter_anisotropic') ||
+        gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic') ||
+        gl.getExtension('MOZ_EXT_texture_filter_anisotropic');
+      if (ext) {
+        const max = gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT) || 1;
+        const level = Math.min(8, max);
+        gl.texParameterf(gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, level);
+        this.aniso = Math.max(this.aniso, level);
+      }
+    }
     gl.bindTexture(gl.TEXTURE_2D, null);
     return tex;
   }
@@ -1080,6 +1135,19 @@ class GLRenderer {
     gl.uniform1f(P.u.uGridPx, TUNE.gridPx);
     gl.uniform1f(P.u.uExposure, TUNE.exposure);
     gl.uniform1f(P.u.uSaturation, TUNE.saturation);
+    // 极地环向平滑 / 中国蒙版倍率：可由调试接口临时覆盖（自动化测试做前后对比用）
+    const tune = this.tuning || {};
+    gl.uniform1f(P.u.uPolarStrength, tune.polarStrength == null ? 1 : tune.polarStrength);
+    gl.uniform1f(P.u.uPolarPx, tune.polarPx == null ? TUNE.polarPx : tune.polarPx);
+    gl.uniform1f(P.u.uPoleBumpFade, tune.poleBumpFade == null ? TUNE.poleBumpFade : tune.poleBumpFade);
+    gl.uniform1f(P.u.uChinaId, tune.chinaId == null ? 1 : tune.chinaId);
+    gl.uniform1f(P.u.uChinaBoost, tune.chinaBoost == null ? TUNE.chinaBoost : tune.chinaBoost);
+    gl.uniform1f(P.u.uDebugPure, tune.debugPure ? 1 : 0);
+    if (tune.spec != null) gl.uniform1f(P.u.uSpec, tune.spec);
+    if (tune.rim != null) gl.uniform1f(P.u.uRim, tune.rim);
+    if (tune.bump != null) gl.uniform1f(P.u.uBump, tune.bump);
+    if (tune.grid != null) gl.uniform1f(P.u.uGrid, tune.grid);
+    if (tune.noNormal) gl.uniform1f(P.u.uHasNormal, 0);
 
     const bind = (loc, texture, unit) => {
       gl.activeTexture(gl.TEXTURE0 + unit);
@@ -1140,6 +1208,26 @@ class GLRenderer {
     }
   }
 
+  /**
+   * 整帧读回（自动化测试用）：重画最后一帧，一次 readPixels 把整张图拿回来，
+   * 之后在 JS 里想取多少点就取多少点 —— 逐点调用 readPixel 会逐点重画，慢得没法用。
+   * 返回的 rgba 是**自下而上**的行序（WebGL 约定），flipY=true 标出来。
+   */
+  capture() {
+    if (!this.ok || !this._frame) return null;
+    try {
+      this.draw(this._frame);
+      const w = this.canvas.width;
+      const h = this.canvas.height;
+      if (!(w > 0) || !(h > 0)) return null;
+      const rgba = new Uint8Array(w * h * 4);
+      this.gl.readPixels(0, 0, w, h, this.gl.RGBA, this.gl.UNSIGNED_BYTE, rgba);
+      return { width: w, height: h, scale: this.scale || 1, rgba, flipY: true };
+    } catch {
+      return null;
+    }
+  }
+
   dispose() {
     try {
       const lose = this.gl && this.gl.getExtension('WEBGL_lose_context');
@@ -1187,6 +1275,8 @@ export class Globe {
     this._force2D = forceCanvas2D === true;
     this._glOpts = { lonSeg, latSeg };
     this._texUploadMs = 0;
+    this._chinaId = 1; // 兜底：真实值从 countries.json 的 chinaIndex 读（见 _loadChinaIndex）
+    this._chinaIdPromise = null;
   }
 
   // ── 环境能力 ────────────────────────────────────────────────
@@ -1238,6 +1328,9 @@ export class Globe {
       textureState: this._texState,
       assets: this._assetBase,
       uploadMs: Math.round(this._texUploadMs),
+      chinaId: this._chinaId,
+      aniso: this._gl ? this._gl.aniso : 0,
+      tuning: this._gl ? { ...this._gl.tuning } : {},
       webgl: this._gl && this._gl.info ? { ...this._gl.info } : null,
       buffer: this._gl && this._gl.ok
         ? { w: this._gl.canvas.width, h: this._gl.canvas.height, scale: Number((this._gl.scale || 1).toFixed(3)) }
@@ -1358,6 +1451,36 @@ export class Globe {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * 整帧读回（自动化测试用）。返回 { width, height, scale, rgba, flipY }，
+   * 供测试在一次绘制里取成百上千个点做统计（中国红色对比、北极伪影扫描都要这个）。
+   */
+  captureFrame() {
+    const run = this._run;
+    if (!run) return null;
+    if (this._renderer === 'webgl' && this._gl && this._gl.ok) return this._gl.capture();
+    try {
+      const canvas = run.baseCanvas;
+      const ctx = run.baseCtx;
+      if (!canvas || !ctx) return null;
+      const d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      return {
+        width: canvas.width,
+        height: canvas.height,
+        scale: run.view ? run.view.dpr : 1,
+        rgba: d.data,
+        flipY: false, // getImageData 是自上而下的行序
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** 调试覆盖：临时改渲染调参（自动化测试做「修复前 / 修复后」对比用）。 */
+  setTuning(patch) {
+    if (this._gl) this._gl.tuning = { ...this._gl.tuning, ...(patch || {}) };
   }
 
   /** 屏幕坐标 → 该点的纹理 uv（调试用，配合 sampleScreen 核对贴图方向）。 */
@@ -1497,6 +1620,28 @@ export class Globe {
     return `${this._assetBase}${name}`;
   }
 
+  /**
+   * 读 countries.json 里的 chinaIndex（3KB，后台异步，失败就退回默认值 1）。
+   * 不把编号硬编码死在代码里：贴图是生成物，编号分配算法已经换过一次，
+   * 写死迟早对不上；读到了就以后者为准。
+   */
+  _loadChinaIndex() {
+    if (this._chinaIdPromise) return;
+    if (typeof fetch !== 'function') return;
+    const url = `${this._assetBase}countries.json`;
+    this._chinaIdPromise = fetch(url)
+      .then((r) => (r && r.ok ? r.json() : null))
+      .then((json) => {
+        const idx = json ? Number(json.chinaIndex) : NaN;
+        if (Number.isFinite(idx) && idx >= 1 && idx <= 255) {
+          this._chinaId = idx;
+          if (this._gl) this._gl.tuning = { ...this._gl.tuning, chinaId: idx };
+        }
+        return this._chinaId;
+      })
+      .catch(() => this._chinaId);
+  }
+
   /** 载入一张图片（带超时，绝不无限挂住）。 */
   _loadImage(url) {
     return new Promise((resolve, reject) => {
@@ -1532,6 +1677,7 @@ export class Globe {
 
   /** 走到这里说明 WebGL 上下文可用：异步拉贴图，**不阻塞**动画时间轴。 */
   _startTextures(run) {
+    this._loadChinaIndex();
     // 贴图已经备好（第二次及以后的过场）：直接挂上，不必等一个微任务
     if (this._tex) {
       if (this._gl) this._gl.setTextures(this._tex);

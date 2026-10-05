@@ -345,6 +345,173 @@ window.__beginPair = (from, to) => {
 };
 window.__awaitPending = () => window.__pending;
 
+// ── 整帧读回 + 快速取像素（一次 readPixels，之后纯 JS 查表）────────────
+let _cap = null;
+function refreshCapture() {
+  _cap = globe.captureFrame();
+  return _cap;
+}
+/** 从整帧缓冲里取一块 size×size 的平均色（坐标是 CSS 像素）。 */
+function px(cap, x, y, size = 3) {
+  if (!cap) return null;
+  const s = cap.scale;
+  const cx = Math.round(x * s);
+  const cy = Math.round(y * s);
+  const half = Math.floor(size / 2);
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let n = 0;
+  for (let dy = -half; dy <= half; dy++) {
+    for (let dx = -half; dx <= half; dx++) {
+      const ix = Math.min(cap.width - 1, Math.max(0, cx + dx));
+      const iy = Math.min(cap.height - 1, Math.max(0, cy + dy));
+      const row = cap.flipY ? cap.height - 1 - iy : iy;
+      const i = (row * cap.width + ix) * 4;
+      r += cap.rgba[i];
+      g += cap.rgba[i + 1];
+      b += cap.rgba[i + 2];
+      n++;
+    }
+  }
+  if (!n) return null;
+  return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+}
+
+/**
+ * 中国红色：像素级对比（相机停在乌鲁木齐，中国 / 蒙古 / 哈萨克斯坦 / 印度同屏）。
+ * 控制变量的做法：只取**同一纬度带**上的点，并且用「渲染像素的 R/G ÷ 源贴图同点的 R/G」
+ * 把地形本色与光照（都是乘法）约掉，剩下的就是蒙版带来的红移。
+ */
+window.__chinaRedProbe = async (atMs = 5400) => {
+  const from = CITIES.beijing || window.__synth(39.9042, 116.4074, '北京', 'Beijing');
+  const to = window.__synth(43.8256, 87.6168, '乌鲁木齐', 'Urumqi');
+  const p = window.__runPair(from, to);
+  await new Promise((r) => setTimeout(r, atMs));
+  const cap = refreshCapture();
+  const view = globe.viewport;
+  const bands = [33, 41, 47];
+  const rows = [];
+  for (const lat of bands) {
+    for (let lon = -180; lon < 180; lon += 1.5) {
+      const id = window.__countryIdAt(lat, lon);
+      if (id === null || id === 0) continue;
+      const sc = globe.worldToScreen(lat, lon);
+      if (!sc || !sc.visible) continue;
+      if (Math.hypot(sc.nx, sc.ny) > 0.74) continue; // 只用盘心区域，避开大气边缘光/高光
+      const p2 = px(cap, sc.x, sc.y, 3);
+      const tex = window.__texelAt(lat, lon, 'albedo');
+      if (!p2 || !tex) continue;
+      const outRG = (p2[0] + 1) / (p2[1] + 1);
+      const texRG = (tex[0] + 1) / (tex[1] + 1);
+      rows.push({
+        lat,
+        lon,
+        id,
+        rendered: p2,
+        texel: tex,
+        rg: outRG,
+        texRG,
+        redShift: outRG / texRG,
+      });
+    }
+  }
+  const byCountry = {};
+  for (const r of rows) {
+    const k = String(r.id);
+    if (!byCountry[k]) byCountry[k] = { id: r.id, name: window.__countryNameOf(r.id), n: 0, redShift: 0, rg: 0, texRG: 0 };
+    const b = byCountry[k];
+    b.n++;
+    b.redShift += r.redShift;
+    b.rg += r.rg;
+    b.texRG += r.texRG;
+  }
+  const groups = Object.values(byCountry)
+    .filter((b) => b.n >= 5)
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      n: b.n,
+      redShift: b.redShift / b.n,
+      rg: b.rg / b.n,
+      texRG: b.texRG / b.n,
+    }))
+    .sort((a, b) => b.redShift - a.redShift);
+  const cn = groups.find((g) => g.name === 'China') || null;
+  const result = {
+    bands,
+    total: rows.length,
+    groups,
+    china: cn,
+    samples: rows.filter((r) => r.id === (cn ? cn.id : -1)).slice(0, 6),
+    info: { rendererMode: globe.rendererMode, chinaId: globe.rendererInfo.chinaId, view: { R: view.R } },
+  };
+  await p;
+  return result;
+};
+
+/**
+ * 北极伪影扫描：相机停在极点上方，沿几条纬线各扫一圈。
+ * 「风车条纹」= 沿纬线方向的高频起伏，所以取每个点与左右邻居均值的差（二阶差分），
+ * 平滑的光照变化贡献很小，条纹会直接把 hf 顶起来。
+ */
+window.__poleProbe = async (atMs = 5400) => {
+  const from = window.__synth(0, 0, '赤道', 'Equator');
+  const to = window.__synth(89.9, 0, '极点上方', 'OverPole'); // 相机纬度夹到 85
+  const p = window.__runPair(from, to);
+  await new Promise((r) => setTimeout(r, atMs));
+  const cap = refreshCapture();
+  const rings = [];
+  for (const lat of [72, 78, 82, 85, 87.5, 89]) {
+    const vals = [];
+    for (let lon = -180; lon < 180; lon += 3) {
+      const sc = globe.worldToScreen(lat, lon);
+      if (!sc || !sc.visible) continue;
+      if (Math.hypot(sc.nx, sc.ny) > 0.86) continue; // 避开边缘光
+      const c = px(cap, sc.x, sc.y, 3);
+      if (c) vals.push({ lon, c, lum: 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] });
+    }
+    let hfSum = 0;
+    let hfMax = 0;
+    let hfN = 0;
+    for (let i = 1; i < vals.length - 1; i++) {
+      if (Math.abs(vals[i + 1].lon - vals[i - 1].lon - 6) > 1e-6) continue; // 跨接缝/空洞
+      const hf = Math.abs(vals[i].lum - (vals[i - 1].lum + vals[i + 1].lum) / 2);
+      hfSum += hf;
+      if (hf > hfMax) hfMax = hf;
+      hfN++;
+    }
+    const lums = vals.map((v) => v.lum);
+    const mean = lums.length ? lums.reduce((a, b) => a + b, 0) / lums.length : 0;
+    const std = lums.length
+      ? Math.sqrt(lums.reduce((a, b) => a + (b - mean) * (b - mean), 0) / lums.length)
+      : 0;
+    // 「糊成白饼」的反面：沿纬线平均色在**经向**（不同纬度之间）还要有结构
+    const meanRgb = [0, 1, 2].map((ch) =>
+      vals.length ? Math.round(vals.reduce((a, v) => a + v.c[ch], 0) / vals.length) : 0,
+    );
+    rings.push({
+      lat,
+      n: vals.length,
+      hfMean: hfN ? hfSum / hfN : 0,
+      hfMax,
+      std,
+      meanLum: mean,
+      meanRgb,
+      // 靠近极点的一圈，用于「冰盖形状还在不在」的肉眼核对
+      samples: vals.filter((_, i) => i % 10 === 0).map((v) => [v.lon, ...v.c]),
+    });
+  }
+  await p;
+  return { rings, view: globe.viewport };
+};
+
+/** 临时改渲染调参（做「修复前/修复后」对比）。 */
+window.__setTuning = (patch) => {
+  globe.setTuning(patch);
+  return globe.rendererInfo.tuning;
+};
+
 /** reduced-motion / 配置读取。 */
 window.__debug = () => ({
   supported: globe.supported,

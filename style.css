@@ -565,13 +565,16 @@ body.is-paused #app::after {
   pointer-events: none;
 }
 
-/* ------------------------------------------------------ 9. 音乐开关（角落） */
-/* 默认很淡，几乎不打扰；hover / focus / 点按时才到 1。无边框无底色，但热区 ≥56x56。 */
+/* ------------------------------------------------------ 9. 角落小按钮 */
+/* 暂停（左上）与音乐开关（右上）：默认很淡，几乎不打扰；hover / focus / 点按时才到 1。
+   无边框无底色，但热区 ≥56x56（适合小手）。
+   ⚠ 暂停**只有**点 #btn-pause 才触发：点画面空白或文字都不暂停（老板明确要求）。
+   所以不要在 #app 上挂 click 监听。 */
 
+#btn-pause,
 #btn-music {
   position: absolute;
   top: max(8px, env(safe-area-inset-top, 0px));
-  right: max(8px, env(safe-area-inset-right, 0px));
   z-index: 5;
   display: inline-flex;
   align-items: center;
@@ -592,21 +595,34 @@ body.is-paused #app::after {
   transition: opacity 220ms ease, transform 140ms ease;
 }
 
+#btn-pause { left: max(8px, env(safe-area-inset-left, 0px)); }
+#btn-music { right: max(8px, env(safe-area-inset-right, 0px)); }
+
 @media (hover: hover) {
+  #btn-pause:hover,
   #btn-music:hover { opacity: 1; }
 }
 
 /* 触屏没有 hover：默认稍亮一点，手指按下时到 1 */
 @media (hover: none) {
+  #btn-pause,
   #btn-music { opacity: 0.5; }
 }
 
+#btn-pause:active,
 #btn-music:active { opacity: 1; transform: scale(0.94); }
 
+#btn-pause:focus-visible,
 #btn-music:focus-visible {
   opacity: 1;
   outline: 3px solid rgba(255, 255, 255, 0.9);
   outline-offset: 2px;
+}
+
+/* 暂停中：按钮常亮并显示播放符号（main.js 会同步 textContent 与 aria-pressed） */
+#app.is-paused #btn-pause,
+body.is-paused #btn-pause {
+  opacity: 1;
 }
 
 /* 静音状态（main.js 会加 .is-off；也兼容 is-muted 与 #app/body 上的状态类） */

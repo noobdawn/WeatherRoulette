@@ -19,10 +19,11 @@ import { loadImageManifest, resolveCityImage } from './ui/assets.js';
 
 const $ = (sel) => document.querySelector(sel);
 
-// 极简版：界面上唯一的控件是右上角的音乐开关（老板要求：进去就自动播报，不要「开始播报」界面）。
-// index.html 里已经完全没有 #start-overlay；只有在浏览器拦截自动播放时，
+// 极简版：界面上只有两个角落小按钮——左上暂停、右上音乐开关。
+// 进去自动播报，没有「开始播报」界面；只有浏览器拦截自动播放时，
 // 才会由 ensureAutoplay() 动态创建一个同 id 的兜底遮罩（样式复用 style.css 里现成的规则）。
 const ui = {
+  pause: $('#btn-pause'),
   music: $('#btn-music'),
 };
 
@@ -450,7 +451,13 @@ async function boot() {
   });
   if (ui.music && !musicOn) ui.music.classList.add('is-off');
 
-  /** 点一下画面 = 暂停/继续（没有任何按钮，但孩子和家长都需要这个能力） */
+  /**
+   * 暂停/继续。
+   *
+   * ⚠ 老板明确要求：**暂停有且只有点 #btn-pause 才触发**。
+   * 点画面空白处或文字都不应该暂停，所以这里**不能**在 #app 上挂 click 监听
+   * （早期版本挂过，孩子随手点一下就停了，家长也会误触）。
+   */
   const togglePause = () => {
     const st = broadcaster.state;
     if (!st.playing && !st.paused) return; // 还没开始播报
@@ -462,12 +469,29 @@ async function boot() {
       // 暂停时把地球过场也收掉，否则会停在动画中间一帧，看着像卡住
       globe?.cancel();
       // Broadcaster.pause() 只更新自己的状态并发 onProgress，不会碰界面；
-      // 暂停的视觉反馈（左上角小指示）必须在这里显式同步，否则点了没任何反应。
+      // 暂停的视觉反馈必须在这里显式同步，否则点了没任何反应。
       screen.setPaused(true);
     }
+    syncPauseButton();
   };
-  const appEl = $('#app');
-  appEl?.addEventListener('click', togglePause);
+
+  /** 把暂停状态同步到按钮：图标、aria、以及可读标签 */
+  function syncPauseButton() {
+    const btn = ui.pause;
+    if (!btn) return;
+    const paused = Boolean(broadcaster.state.paused);
+    btn.textContent = paused ? '▶' : '⏸';
+    btn.setAttribute('aria-pressed', String(paused));
+    btn.setAttribute('aria-label', paused ? '继续播报' : '暂停播报');
+    btn.setAttribute('title', paused ? '继续播报' : '暂停播报');
+  }
+
+  ui.pause?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePause();
+  });
+  syncPauseButton();
+  const appEl = $('#app'); // 仅用于调试钩子里判断监听是否挂上，不再挂 click
 
   /** 切城/重新洗牌时也要收掉过场，避免动画与新卡片打架 */
   const withGlobeCancelled = (fn) => (...args) => {
@@ -487,10 +511,11 @@ async function boot() {
     next: withGlobeCancelled(() => broadcaster.next()),
     prev: withGlobeCancelled(() => broadcaster.prev()),
     reshuffle: withGlobeCancelled(() => broadcaster.reshuffle()),
-    hasAppListener: Boolean(appEl),
   };
 
-  // 键盘也能操作，方便家长
+  // 键盘也能操作，方便家长。
+  // 空格/←/→ 是有意的辅助入口（孩子用触屏点按钮，家长用键盘），
+  // 且必须 preventDefault，否则空格与方向键会滚动页面。
   document.addEventListener('keydown', (e) => {
     if (e.key === ' ') { e.preventDefault(); togglePause(); }
     else if (e.key === 'ArrowRight') broadcaster.next();

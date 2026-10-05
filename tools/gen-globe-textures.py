@@ -57,11 +57,6 @@ DARKEN_POLES = 0.10       # 极地稍微压暗（等距圆柱在高纬会被拉�
 BORDER_RGBA = (28, 38, 56, 150)
 BORDER_WIDTH = 1
 
-# 国家蒙版：低饱和度色循环
-TINT_COUNT = 64
-TINT_SAT = 0.30
-TINT_VAL = 0.86
-
 
 def fetch(url: str, cache_name: str, timeout: float = 180.0) -> bytes:
     CACHE.mkdir(parents=True, exist_ok=True)
@@ -259,15 +254,121 @@ def draw_borders(albedo: Image.Image, geoms) -> None:
     albedo.paste(base.convert("RGB"), (0, 0))
 
 
+CHINA_INDEX = 1          # 中国固定用这个编号 → 调色板里对应纯红
+CHINA_NAME = "China"
+
+# 其他国家的低饱和色生成
+TINT_COUNT = 64
+TINT_SAT = 0.30
+TINT_VAL = 0.86
+
+
+def _hsv(h: float, s: float, v: float) -> tuple[int, int, int]:
+    r, g, b = colorsys.hsv_to_rgb(h % 1.0, s, v)
+    return int(r * 255), int(g * 255), int(b * 255)
+
+
+def assign_country_indices(geoms) -> dict[int, int]:
+    """给每个国家分配 1..255 的编号。
+
+    两条要求：
+      1) **中国必须是红色** —— 固定给 CHINA_INDEX，调色板把它映射成纯红，
+         这样孩子在地球上一眼就能找到自己的国家。
+      2) **相邻国家不能同色** —— 否则两块同色版图贴在一起，看起来像一个国家。
+
+    做法：先用 shapely 的 STRtree 判出「共享 >0.2° 边界」的邻接关系，
+    然后带种子的贪心着色：中国先占 1，其余按面积从大到小取「邻国已用色之外」的编号。
+    一旦邻接冲突解决不了（颜色不够），退而求其次只保证「不与邻国编号相同」，
+    并把冲突记进 summary —— 实测在本数据集上不需要退让。
+    """
+    from shapely.strtree import STRtree
+
+    items = []
+    for code, name, geom in geoms:
+        items.append((name or code or "", geom))
+    items.sort(key=lambda t: -t[1].area)   # 面积大的先占色，避免大国被挤到糟糕的编号
+
+    tree = STRtree([g for _, g in items])
+    neighbors: dict[int, set[int]] = {i: set() for i in range(len(items))}
+    for i, (_, geom) in enumerate(items):
+        for j in tree.query(geom):
+            j = int(j)
+            if j <= i:
+                continue
+            other = items[j][1]
+            if not geom.intersects(other):
+                continue
+            # 共享边界足够长才算邻国（只碰到一个点不算）
+            try:
+                shared = geom.boundary.intersection(other.boundary)
+            except Exception:  # noqa: BLE001
+                continue
+            if shared.is_empty or shared.length < 0.2:
+                continue
+            neighbors[i].add(j)
+            neighbors[j].add(i)
+
+    used: dict[int, set[int]] = {}       # 编号 → 用了它的国家下标
+    assignment: dict[int, int] = {}      # 国家下标 → 编号
+    conflicts = 0
+
+    def pick(i: int, want: int | None = None) -> int:
+        """挑一个不与邻国重复的编号；优先挑用的人最少的，让色相尽量分散。"""
+        banned = {assignment[n] for n in neighbors[i] if n in assignment}
+        if want is not None and want not in banned:
+            return want
+        best = None
+        best_load = 10 ** 9
+        for cand in range(1, 256):
+            if cand in banned:
+                continue
+            load = len(used.get(cand, ()))
+            if load < best_load:
+                best, best_load = cand, load
+                if load == 0:
+                    break
+        if best is None:
+            # 极端情况：邻国把 255 个编号占满了，只能容忍一次重色
+            for cand in range(1, 256):
+                if cand not in {assignment[n] for n in neighbors[i]}:
+                    return cand
+            return CHINA_INDEX
+        return best
+
+    # 中国先占红
+    china_at = None
+    for i, (name, _) in enumerate(items):
+        if name == CHINA_NAME:
+            china_at = i
+            break
+    if china_at is not None:
+        assignment[china_at] = CHINA_INDEX
+        used.setdefault(CHINA_INDEX, set()).add(china_at)
+
+    for i, (name, _) in enumerate(items):
+        if i in assignment:
+            continue
+        idx = pick(i)
+        assignment[i] = idx
+        used.setdefault(idx, set()).add(i)
+
+    # 复核：统计有多少条邻接边出现同色
+    for i, nbrs in neighbors.items():
+        for j in nbrs:
+            if j > i and assignment.get(i) == assignment.get(j):
+                conflicts += 1
+    print(f"  编号分配完成：{len(items)} 个国家，邻接同色冲突 {conflicts} 条"
+          + (f"，中国 = #{assignment[china_at]}" if china_at is not None else "，⚠ 没找到 China"))
+
+    return {i: assignment[i] for i in range(len(items))}, items, conflicts
+
+
 def make_country_id_map(geoms, size: tuple[int, int]) -> tuple[Image.Image, dict]:
     """栅格化国家编号图。
 
     ⚠ 曾经写错过一次：当时按「每国画一张图层再 paste(layer, mask=layer)」叠加。
     那样后画国家的 0 值像素不会覆盖先画的，导致版图互相串色，看起来一团碎斑。
     正确做法是**直接在编号图上以编号为填充值绘制**，并且先画大到小、小国覆盖大国。
-
-    另外编号不能按面积顺序递增——那样序号越大越亮，看起来像噪点。
-    这里按国名排序取稳定编号，亮度变化就与地理无关了。
     """
     w, h = size
     id_map = Image.new("L", (w, h), 0)
@@ -277,16 +378,13 @@ def make_country_id_map(geoms, size: tuple[int, int]) -> tuple[Image.Image, dict
     def to_px(x, y):
         return ((x + 180.0) / 360.0 * w, (90.0 - y) / 180.0 * h)
 
-    # 稳定编号：按国名排序，编号与面积无关
-    ordered = sorted(geoms, key=lambda t: (t[1] or t[0] or ""))
-    indexed = []
-    for i, (code, name, geom) in enumerate(ordered, start=1):
-        idx = ((i - 1) % 255) + 1
-        names[str(idx)] = name or code
-        indexed.append((idx, geom))
-
+    indices, items, conflicts = assign_country_indices(geoms)
+    for i, (name, _geom) in enumerate(items):
+        names[str(indices[i])] = name
     # 绘制顺序：面积从大到小，让小块国家后画、覆盖大国，避免飞地被吞
-    for idx, geom in sorted(indexed, key=lambda t: -t[1].area):
+    for i in sorted(range(len(items)), key=lambda k: -items[k][1].area):
+        idx = indices[i]
+        geom = items[i][1]
         polys = [geom] if geom.geom_type == "Polygon" else (
             list(geom.geoms) if geom.geom_type == "MultiPolygon" else [])
         for poly in polys:
@@ -301,7 +399,12 @@ def make_country_id_map(geoms, size: tuple[int, int]) -> tuple[Image.Image, dict
                 if len(hc) >= 3:
                     draw.polygon(hc, fill=0)
 
-    return id_map, {"count": len(ordered), "names": names}
+    return id_map, {
+        "count": len(items),
+        "names": names,
+        "chinaIndex": CHINA_INDEX,
+        "neighborColorConflicts": conflicts,
+    }
 
 
 def build_normal(albedo: Image.Image, width: int, strength: float = 2.6) -> Image.Image:
@@ -349,17 +452,28 @@ def build_normal(albedo: Image.Image, width: int, strength: float = 2.6) -> Imag
 
 
 def make_palette(n: int = 256) -> Image.Image:
-    """低饱和度国家调色板（256×1），供着色器把编号映射成淡色。"""
+    """国家淡色调色板（256×1），供着色器把编号映射成低饱和颜色。
+
+    ★ CHINA_INDEX 固定为**纯红** —— 老板要求「保证中国是红色」，
+    这样孩子在地球上一眼就能找到自己的国家。
+    其余编号用黄金角散开色相（低饱和），并避开红色相区间（±0.05），
+    免得别的国家看起来也像中国。
+    """
     img = Image.new("RGB", (n, 1))
     px = img.load()
     for i in range(n):
         if i == 0:
-            px[i, 0] = (0, 0, 0)
+            px[i, 0] = (0, 0, 0)          # 0 = 海洋
             continue
-        # 黄金角散开色相，避免相邻编号颜色太近
+        if i == CHINA_INDEX:
+            # 明显但不过分刺眼的红（低饱和版），配合低强度混合后是"淡红"
+            px[i, 0] = _hsv(0.0, 0.62, 0.92)
+            continue
         hue = (i * 0.618033988749895) % 1.0
-        r, g, b = colorsys.hsv_to_rgb(hue, TINT_SAT, TINT_VAL)
-        px[i, 0] = (int(r * 255), int(g * 255), int(b * 255))
+        # 避开红色相（0 与 1 附近），否则别的国家也会发红
+        if hue < 0.05 or hue > 0.95:
+            hue = (hue + 0.5) % 1.0
+        px[i, 0] = _hsv(hue, TINT_SAT, TINT_VAL)
     return img
 
 
@@ -378,7 +492,29 @@ def check() -> int:
         total += size
         print(f"  ✓ {name:<18} {size / 1024:>8.0f} KB")
     print(f"  合计 {total / 1024:.0f} KB")
-    return 0
+
+    # 校验两条硬要求：中国必须是红色、邻国不重色
+    meta = json.loads((OUT_DIR / "countries.json").read_text(encoding="utf-8"))
+    china_idx = str(meta.get("chinaIndex", CHINA_INDEX))
+    china_name = meta.get("names", {}).get(china_idx, "")
+    pal = Image.open(OUT_DIR / "palette.png").convert("RGB")
+    r, g, b = pal.getpixel((int(china_idx), 0))
+    is_red = r > 150 and r > g * 1.6 and r > b * 1.6
+    ok = True
+    if china_name != CHINA_NAME:
+        print(f"  ✗ #{china_idx} 对应的不是 China，而是「{china_name}」")
+        ok = False
+    else:
+        print(f"  ✓ 中国 = 编号 {china_idx}，调色板 RGB({r},{g},{b})"
+              + ("（红色 ✓）" if is_red else "（不是红色 ✗）"))
+    if not is_red:
+        ok = False
+    conflicts = meta.get("neighborColorConflicts", 0)
+    print(f"  {'✓' if conflicts == 0 else '✗'} 邻国同色冲突 {conflicts} 条"
+          + ("" if conflicts == 0 else "（相邻国家撞色会看起来像一个国家）"))
+    if conflicts:
+        ok = False
+    return 0 if ok else 1
 
 
 def main() -> int:
