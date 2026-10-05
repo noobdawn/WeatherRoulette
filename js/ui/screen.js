@@ -13,7 +13,7 @@
 //
 // js/ui/weather-icon.js 与 js/ui/assets.js 由队友并行开发：这里用惰性动态导入 + 兜底实现，
 // 保证任何一个还没就绪时页面都不会整块挂掉；两个模块就绪后自动用真实现。
-import { dayLabel, dayLabelEn, toF } from '../core/format.js';
+import { dayLabel, dayLabelEn, toF, tempC, weatherOf } from '../core/format.js';
 import { ICON_LABELS } from '../core/constants.js';
 import { isDaytime, localTime } from '../core/utils.js';
 
@@ -307,9 +307,13 @@ export class Screen {
 
   /**
    * @param {object} desc describeCard(card) 的结果
-   * @param {{city?:object, imageUrls?:Array, dayIndex?:number, cardIndex?:number, total?:number}} [opts]
+   * @param {{city?:object, imageUrls?:Array, dayIndex?:number, cardIndex?:number,
+   *          total?:number, forecast?:Array}} [opts]
+   *   forecast：未来两天（只显示不播报），每项 = dailyToDays() 的一天 + dayIndex
    */
-  renderCard(desc, { city, imageUrls = [], dayIndex = 0, cardIndex = 0, total = 0 } = {}) {
+  renderCard(desc, {
+    city, imageUrls = [], dayIndex = 0, cardIndex = 0, total = 0, forecast = [],
+  } = {}) {
     if (!desc) return;
     const c = city || desc.city || {};
     this._city = c;
@@ -333,6 +337,9 @@ export class Screen {
     const hi = numOr(desc.hi, null);
     const lo = numOr(desc.lo, hi);
     this.#renderTemps(hi, lo);
+
+    // 第二块：未来两天（小字，位于第一块下方）。只显示，不参与播报与朗读文本。
+    this.#renderForecast(forecast);
 
     const tz = c.timezone;
     const local = tz ? localTime(tz) : null;
@@ -565,6 +572,21 @@ export class Screen {
     const key = iconKey || 'cloud-sun';
     const token = ++this._iconToken;
 
+    const el = await this.#buildIcon(key);
+    // 主图标用 token 防竞态：期间又切了城市就丢弃这次结果
+    if (token !== this._iconToken) return;
+    host.textContent = '';
+    if (el) host.append(el);
+  }
+
+  /**
+   * 造一个天气图标元素（不直接插进 DOM，由调用方决定放哪）。
+   * 供主图标与「未来两天」的每一行复用 —— 预报行的图标是独立节点，
+   * 不能共用一个 host（否则每行会互相覆盖）。
+   * @returns {Promise<Element|null>}
+   */
+  async #buildIcon(iconKey, { small = false } = {}) {
+    const key = iconKey || 'cloud-sun';
     const mod = await loadIconModule();
     const render = mod?.renderWeatherIcon;
     if (typeof render === 'function') {
@@ -578,25 +600,72 @@ export class Screen {
           svg = null;
         }
       }
-      if (svg) {
-        if (token === this._iconToken) {
-          host.textContent = '';
-          host.append(svg);
-        }
-        return;
-      }
+      if (svg) return svg;
     }
-
     // 队友模块还没就绪：用字形兜底，保证有东西可看
-    if (token !== this._iconToken) return;
     const span = this.doc.createElement('span');
     span.className = 'icon-fallback';
     span.setAttribute('role', 'img');
     span.setAttribute('aria-label', ICON_LABELS[key] || '天气');
     span.textContent = ICON_GLYPHS[key] || '⛅';
-    span.style.cssText = 'font-size:clamp(40px,12vmin,140px);line-height:1;filter:drop-shadow(0 8px 18px rgba(0,0,0,.35));';
-    host.textContent = '';
-    host.append(span);
+    // 主图标很大、预报行图标很小，尺寸分别由调用方与 style.css 控制
+    span.style.cssText = small
+      ? 'line-height:1;'
+      : 'font-size:clamp(40px,12vmin,140px);line-height:1;filter:drop-shadow(0 8px 18px rgba(0,0,0,.35));';
+    return span;
+  }
+
+  /**
+   * 渲染「未来两天」那一块（老板要求界面拆两块：上面当前、下面未来两天，小字）。
+   *
+   * ⚠ 这块**只显示不播报**：describeCard() 与语音片段完全不受影响，播报仍只念当前那天；
+   *   内容也不进 setStatus()，免得屏幕阅读器把两天预报也念一遍。
+   */
+  #renderForecast(forecast) {
+    const list = this.#node('forecast-list');
+    const block = this.#node('forecast-block');
+    if (!list || !block) return;
+
+    const items = Array.isArray(forecast) ? forecast.filter(Boolean) : [];
+    // 没有数据就整块隐藏，不留空框
+    block.hidden = items.length === 0;
+    list.textContent = '';
+    if (!items.length) return;
+
+    for (const day of items) {
+      const li = this.doc.createElement('li');
+      li.className = 'fc-row';
+
+      // 日期：沿用播报用的 dayLabel（今天/明天/后天），字号由 style.css 的小字控制
+      const label = this.doc.createElement('span');
+      label.className = 'fc-day';
+      label.textContent = dayLabel(day.dayIndex ?? 0);
+
+      const iconBox = this.doc.createElement('span');
+      iconBox.className = 'fc-icon';
+      iconBox.setAttribute('aria-hidden', 'true');
+
+      const range = this.doc.createElement('span');
+      range.className = 'fc-range';
+      // 温度必须取整：主块走的是 tempC()（17 而不是 17.3），
+      // 预报行若直接显示原始浮点会出现「17°C / 7.4~18.3°C」这种不一致。
+      const hiRaw = numOr(day.tMax, null);
+      const loRaw = numOr(day.tMin, hiRaw);
+      const hasTemp = hiRaw != null;
+      const hi = hasTemp ? tempC(hiRaw) : null;
+      const lo = hasTemp ? tempC(loRaw == null ? hiRaw : loRaw) : null;
+      range.textContent = hasTemp ? `${lo}~${hi}°C` : '—';
+
+      li.append(label, iconBox, range);
+      const w = weatherOf(day.code);
+      // aria-label 让屏幕阅读器读得懂（图标本身 aria-hidden）
+      li.setAttribute('aria-label', `${label.textContent} ${w.zh} ${range.textContent}`);
+      list.append(li);
+
+      this.#buildIcon(w.icon, { small: true })
+        .then((el) => { if (el) iconBox.append(el); })
+        .catch(() => { /* 图标失败不影响文字 */ });
+    }
   }
 
   #renderTemps(hi, lo) {

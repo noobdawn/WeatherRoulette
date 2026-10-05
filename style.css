@@ -797,6 +797,102 @@ body.is-started #start-overlay,
   }
 }
 
+/* ---------------------------------------------- 12.5 预报两块（现在 / 未来两天） */
+/*
+   老板要求把天气界面拆成两块：
+     第一块 #now-block     —— 当前天气与气温，**字号与拆分前完全一致**（本文件不动 #weather-row
+                              / #temp-row / #temp-c / #weather-zh 的任何字号规则，只是把它们
+                              包进了一个容器，所以视觉上没有任何变化）
+     第二块 #forecast-block —— 未来两天，位于第一块下方、字号明显更小、设计简洁
+                              （无面板底色、无边框，直接压在壁纸上，与整体风格一致）
+
+   尺寸刻意用 em / clamp 与主块挂钩，这样在大屏版与窄屏下都自动成比例。
+   #now-block 不设任何字体相关属性，纯粹是个分组容器 —— 这是"字号不变"的关键。
+*/
+
+#now-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gap-card);
+  max-width: 100%;
+}
+
+#forecast-block {
+  max-width: 100%;
+  /* 与第一块之间留一点气口，但不要太远（老板要求整体简洁） */
+  margin-top: clamp(2px, 1.2vh, 14px);
+  /*
+     字号：老板要求"字体小"但没有说多小。取「城市名的 1/4 强」这一档 ——
+     1440 端约 32px（远小于主块 128px，但孩子仍看得清）；
+     375 端约 15px。比首版的 clamp(13px,1.5vmin,20px) 明显更易读：
+     实测 13px 在 1440 端几乎看不清，而这块的信息（明天的天气与温度）
+     对 4~6 岁孩子是有意义的，不能只当装饰。
+  */
+  font-size: clamp(15px, 2.2vmin, 34px);
+  color: var(--fg-2);
+  text-shadow: var(--fg-shadow);
+}
+
+#forecast-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* 上下两行（老板选的排版），行距紧凑 */
+  gap: clamp(1px, 0.5vh, 8px);
+}
+
+/* 一行 = 日期 + 图标 + 温度区间。用 grid 让两行的三列自动对齐 */
+.fc-row {
+  display: grid;
+  grid-template-columns: minmax(3.2em, auto) auto auto;
+  align-items: center;
+  gap: clamp(6px, 1vw, 14px);
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.fc-day {
+  text-align: right;
+  font-weight: 700;
+  opacity: 0.95;
+}
+
+.fc-range {
+  text-align: left;
+  font-family: var(--font-num);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  opacity: 0.95;
+}
+
+/* 预报行的小图标：固定小方块，避免 SVG 撑高行 */
+.fc-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  font-size: 1em;
+}
+
+.fc-icon > svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.fc-icon > .icon-fallback {
+  font-size: 1.1em;
+  line-height: 1;
+}
+
+/* 没有预报数据时整块隐藏，不留空框 */
+#forecast-block[hidden] { display: none; }
+
 /* ---------------------------------------------- 13. 无障碍与动效偏好 */
 
 @media (prefers-reduced-motion: reduce) {

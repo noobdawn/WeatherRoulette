@@ -955,9 +955,11 @@ try {
 
   /**
    * 跑一次转场，并在三个弹道时刻截图（t 由 easePlateau 决定）：
-   *   起飞 1050ms（t≈0.05，刚离地）、最高点 2500ms（t=0.5）、落地 3950ms（t≈0.95，刚落地）。
+   *   起飞 1050ms（t≈0.05，刚离地）、最高点 2500ms（t=0.5）、最近特写 5450ms（落地停留，球最大）。
+   * opts.probeClose 为真时在特写时刻跑 __frameProbe（标签矩形 / 针脚位置）；
+   * opts.discAtClose 为真时同时跑 __discProbe 与 __checkDisc（大球边界检查）。
    */
-  const arcRun = async (fromId, toId, shots = []) => {
+  const arcRun = async (fromId, toId, shots = [], opts = {}) => {
     await session.eval(`window.__begin(${JSON.stringify(fromId)}, ${JSON.stringify(toId)})`, {
       awaitPromise: false,
     });
@@ -965,12 +967,19 @@ try {
     if (shots[0]) await shot(shots[0]);
     await sleep(1450);
     if (shots[1]) await shot(shots[1]);
-    await sleep(1450);
+    // 「最近特写」= 停留段（progress=1，球最大）。这里**等到真的进停留段**再取帧，
+    // 不能靠累加 sleep 估时间：一张 1440×900 PNG 截图要几百毫秒，累加会冲过 6200ms 导致过场已收尾。
+    await session.waitFor(
+      'window.__globe.state.running === true && window.__globe.state.progress >= 1',
+      { timeoutMs: 6000, intervalMs: 60, label: '进入停留段（球最大的特写帧）' },
+    );
+    const closeProbe = opts.probeClose ? await session.eval('window.__frameProbe()') : null;
+    const closeDisc = opts.discAtClose ? await session.eval('window.__discProbe()') : null;
+    const closeView = opts.discAtClose ? await session.eval('window.__checkDisc()') : null;
     if (shots[2]) await shot(shots[2]);
-    await sleep(2300);
     const r = await session.eval('window.__awaitPending()');
     const info = await session.eval('window.__globe.rendererInfo.zoom');
-    return { r, z: r.summary.arc, info };
+    return { r, z: r.summary.arc, info, closeProbe, closeDisc, closeView };
   };
 
   // 显式钉到 1440×900：下面的数值表按这个视口给（与 lead 的定标表对齐）
@@ -982,24 +991,26 @@ try {
   });
   await sleep(250);
 
+  // 三类距离 × 「起飞 / 最高点 / 最近特写」——截图给老板看，命名自带距离与视口
   const aNear = await arcRun('zhuhai', 'macau', [
-    '16-arc-near-takeoff-1440x900',
-    '17-arc-near-apex-1440x900',
-    '18-arc-near-landing-1440x900',
+    '06-arc-near-takeoff-1440x900',
+    '07-arc-near-apex-1440x900',
+    '08-arc-near-closeup-1440x900',
   ]);
   const aNear2 = await arcRun('guangzhou', 'foshan');
   const aNear3 = await arcRun('beijing', 'tianjin');
   const aMid = await arcRun('hefei', 'tokyo', [
-    '19-arc-mid-takeoff-1440x900',
-    '20-arc-mid-apex-1440x900',
-    '21-arc-mid-landing-1440x900',
+    '09-arc-mid-takeoff-1440x900',
+    '10-arc-mid-apex-1440x900',
+    '11-arc-mid-closeup-1440x900',
   ]);
   const aMid2 = await arcRun('beijing', 'london');
-  const aFar = await arcRun('auckland', 'madrid', [
-    '22-arc-far-takeoff-1440x900',
-    '23-arc-far-apex-1440x900',
-    '24-arc-far-landing-1440x900',
-  ]);
+  const aFar = await arcRun(
+    'auckland',
+    'madrid',
+    ['12-arc-far-takeoff-1440x900', '13-arc-far-apex-1440x900', '14-arc-far-closeup-1440x900'],
+    { probeClose: true, discAtClose: true },
+  );
 
   const table = [
     ['近 珠海↔澳门', known.near, aNear],
@@ -1097,6 +1108,59 @@ try {
     `实测 ${aFar.r.ms}ms`,
   );
 
+  // ── 两端贴地特写（nearMinSideRatio = 0.86）：球径、动态范围、大球边界 ──
+  const groundPx = aFar.z.maxRatio * aFar.z.side;
+  const apexPx = aFar.z.minRatio * aFar.z.side;
+  const dynRange = aFar.z.maxRatio / aFar.z.minRatio;
+  check(
+    '★ 两端（贴地特写）= 视口短边 × 0.86，中途 = 短边 × 0.6698（≈2/3）',
+    Math.abs(aFar.z.maxRatio - 0.86) < 0.005 && Math.abs(aFar.z.minRatio - 2 / 3) / (2 / 3) < 0.02,
+    `1440×900：两端 ${(aFar.z.maxRatio * 100).toFixed(1)}%（${groundPx.toFixed(0)}px 直径）→ 中途 ${(aFar.z.minRatio * 100).toFixed(1)}%（${apexPx.toFixed(0)}px）`,
+  );
+  check(
+    // 任务书里的「中途/两端 = 3.9x」是**旧值 0.172** 的口径（0.6698/0.172 = 3.89）；
+    // 现值 0.86 下中途/两端 = 0.78x，反过来两端/中途 = 1.28x —— 断言按现值写，别按旧口径
+    '★ 动态范围（两端 ÷ 中途）≈ 1.28x（> 1.2x）：两端贴地特写明显大于中途全景',
+    dynRange > 1.2 && Math.abs(dynRange - 0.86 / known.far.ratioPeak) < 0.02,
+    `实测 ${dynRange.toFixed(3)}x（${groundPx.toFixed(0)}px → ${apexPx.toFixed(0)}px 直径）；` +
+      `注意旧值 0.172 下才是 0.6698/0.172 = 3.89x —— 那个数对不上现在的 0.86`,
+  );
+
+  // 球很大时的边界：标签矩形、针脚位置、可见点圆盘判据，全部用当前帧真实数据
+  const cp = aFar.closeProbe;
+  check(
+    '★ 球很大时（R=387px 贴地特写）标签仍在画面内：每个标签矩形四边都没出界',
+    !!cp && cp.ok === true && cp.rects.length >= 1 && cp.rects.every((r) => r.inside),
+    cp && cp.ok
+      ? `R=${cp.R.toFixed(1)}px ratio=${cp.ratio.toFixed(4)}；` +
+        cp.rects
+          .map((r) => `「${r.zh}」(${r.left.toFixed(0)},${r.top.toFixed(0)})→(${r.right.toFixed(0)},${r.bottom.toFixed(0)})`)
+          .join(' ')
+      : `探针失败：${cp ? cp.error : 'n/a'}`,
+  );
+  check(
+    '★ 球很大时针脚仍指向城市：标记点位置在画面内，且该像素确实被画了东西',
+    !!cp && cp.ok === true && cp.dots.length >= 1 && cp.dots.every((d) => d.inside && d.pixel[3] > 200),
+    cp && cp.ok
+      ? cp.dots.map((d) => `${d.which}(${d.x.toFixed(0)},${d.y.toFixed(0)}) rgba=[${d.pixel.join(',')}] r=${d.r.toFixed(1)}`).join(' ')
+      : 'n/a',
+  );
+  check(
+    '★ 球很大时可见点仍在球面圆盘内（worldToScreen 判据不因 R 变大而失效）',
+    !!aFar.closeView && aFar.closeView.outsideDisc === 0 && aFar.closeView.visibleMismatch === 0,
+    aFar.closeView
+      ? `${aFar.closeView.checked} 点，越界 ${aFar.closeView.outsideDisc}，visible 不一致 ${aFar.closeView.visibleMismatch}（R=${aFar.closeView.view.R.toFixed(1)}px）`
+      : 'n/a',
+  );
+  check(
+    '★ 交付值下球不溢出短边：直径 774px ≤ 900px（三段式：特写 → 全景 → 特写）',
+    !!aFar.closeDisc && aFar.closeDisc.fitsOnShortSide === true && aFar.closeDisc.overflow === 0,
+    aFar.closeDisc
+      ? `直径/短边 = ${aFar.closeDisc.diameterOverSide.toFixed(4)}，溢出 ${(aFar.closeDisc.overflow * 100).toFixed(2)}%` +
+        `（球内 0.9R rgba=[${aFar.closeDisc.insideX.join(',')}] / 球外 1.1R rgba=[${aFar.closeDisc.outsideX.join(',')}]）`
+      : 'n/a',
+  );
+
   // 前景图层每帧必须清空：一旦没清，圆弧/标记/标签会累积成"扇面"（截图里一眼可见），
   // 而只读数值的断言全绿 —— 所以这条要用真实画布验证。
   await session.eval('window.__begin("auckland","madrid")', { awaitPromise: false });
@@ -1114,7 +1178,7 @@ try {
     `时长 ${fxRun.ms}ms`,
   );
 
-  // ── 16b. 三个视口：ratio 不变（只跟相机距离有关）、R 随短边缩放 ──
+  // ── 16b. 三个视口：ratio 不变（只跟相机距离有关）、R 随短边缩放；两端 = 短边 × 0.86 ──
   console.log('\n【16b】三个视口下的弹道（ratio 与视口无关，R = ratio × 短边/2）');
   for (const vp of viewports) {
     await session.send('Emulation.setDeviceMetricsOverride', {
@@ -1125,11 +1189,12 @@ try {
     });
     await sleep(250);
     const tag = `${vp.w}x${vp.h}`;
-    const far = await arcRun('auckland', 'madrid', [
-      `25-arc-far-takeoff-${tag}`,
-      `26-arc-far-apex-${tag}`,
-      `27-arc-far-landing-${tag}`,
-    ]);
+    const far = await arcRun(
+      'auckland',
+      'madrid',
+      [`15-arc-far-takeoff-${tag}`, `16-arc-far-apex-${tag}`, `17-arc-far-closeup-${tag}`],
+      { probeClose: true },
+    );
     const apexR = far.z.minRatio * far.z.side * 0.5;
     const groundR = far.z.maxRatio * far.z.side * 0.5;
     check(
@@ -1140,9 +1205,25 @@ try {
       `最高点 ${far.z.minRatio.toFixed(4)}，贴地 ${far.z.maxRatio.toFixed(4)}（短边 ${far.z.side}px）`,
     );
     check(
-      `${vp.name}：屏幕半径按短边缩放 —— 贴地 ${groundR.toFixed(0)}px → 最高点 ${apexR.toFixed(0)}px（抛高 ${(far.z.throwRatio * 100).toFixed(1)}%）`,
+      `${vp.name}：★ 两端球径 = 短边 × 0.86（实测 ${((groundR * 2) / far.z.side).toFixed(4)}），中途 ${((apexR * 2) / far.z.side).toFixed(4)}`,
+      Math.abs((groundR * 2) / far.z.side - 0.86) < 0.005
+        && Math.abs((apexR * 2) / far.z.side - 2 / 3) / (2 / 3) < 0.02
+        && Math.abs((groundR * 2) / far.z.side - far.z.maxRatio) < 1e-9,
+      `R: 贴地 ${groundR.toFixed(1)}px（直径 ${(groundR * 2).toFixed(0)}px）→ 最高点 ${apexR.toFixed(1)}px（${(apexR * 2).toFixed(0)}px），短边 ${far.z.side}px`,
+    );
+    check(
+      `${vp.name}：最高点比两端小（两端特写 → 中途全景），抛高 ${(far.z.throwRatio * 100).toFixed(1)}%`,
       apexR < groundR && Math.abs(far.z.throwRatio - known.far.throwPct) < 0.005,
-      `R: ${groundR.toFixed(1)}px → ${apexR.toFixed(1)}px，短边 ${far.z.side}px，hMax=${far.z.hMax.toFixed(4)}`,
+      `R: ${groundR.toFixed(1)}px → ${apexR.toFixed(1)}px，hMax=${far.z.hMax.toFixed(4)}`,
+    );
+    check(
+      `${vp.name}：球很大时标签/针脚仍在画面内`,
+      !!far.closeProbe && far.closeProbe.ok === true
+        && far.closeProbe.rects.every((r) => r.inside)
+        && far.closeProbe.dots.every((d) => d.inside && d.pixel[3] > 200),
+      far.closeProbe && far.closeProbe.ok
+        ? `R=${far.closeProbe.R.toFixed(1)}px，标签 ${far.closeProbe.rects.length} 个，针脚 ${far.closeProbe.dots.length} 个`
+        : 'n/a',
     );
     check(
       `${vp.name}：弹道期间「正北朝上」判据依旧成立`,
@@ -1150,6 +1231,25 @@ try {
       `max|up·east|=${fmt(far.r.summary.maxUpEast)}，min(南y−北y)=${far.r.summary.minPoleGap.toFixed(3)}px`,
     );
   }
+
+  // 手机竖屏补 短途 / 中途 的「起飞 / 最高点 / 最近特写」（lead 要的两套视口截图）
+  await session.send('Emulation.setDeviceMetricsOverride', {
+    width: 375,
+    height: 812,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
+  await sleep(250);
+  await arcRun('zhuhai', 'macau', [
+    '18-arc-near-takeoff-375x812',
+    '19-arc-near-apex-375x812',
+    '20-arc-near-closeup-375x812',
+  ]);
+  await arcRun('hefei', 'tokyo', [
+    '21-arc-mid-takeoff-375x812',
+    '22-arc-mid-apex-375x812',
+    '23-arc-mid-closeup-375x812',
+  ]);
   await session.send('Emulation.setDeviceMetricsOverride', {
     width: 1440,
     height: 900,
@@ -1214,10 +1314,10 @@ try {
     { awaitPromise: false },
   );
   await sleep(2500);
-  await shot('28-arc-far-apex-canvas2d-1440x900');
+  await shot('25-arc-far-apex-canvas2d-1440x900');
   const back2d = await session.eval('window.__backdropProbe(window.__c2dGlobe)');
   await sleep(2000);
-  await shot('29-arc-far-landed-canvas2d-1440x900');
+  await shot('26-arc-far-closeup-canvas2d-1440x900');
   const c2d = await session.eval('window.__c2dPending');
   check(
     '★ 2D 降级路径的夜空铺满整屏（两个对角都不是空白 —— 同一个撞名 bug 的哨兵）',
@@ -1246,6 +1346,78 @@ try {
   );
   const c2dErrors = await session.eval('window.__errors');
   check('2D 路径弹道没有未捕获异常', c2dErrors.length === 0, c2dErrors.join(' | ') || '无');
+
+  // ── 16e. 「球很大」的边界扫描：把 nearMinSideRatio 临时调大，看从哪一档开始出问题 ──
+  // 只改**内存里的实例配置**（window.__setNearRatio），constants.js 一个字都不动。
+  // 目的：①确认交付值 0.86 下没有任何出界；②回答"如果老板要球更大/溢出画面会怎样"。
+  // 除 1.2 那档（要真实时间轴出截图）外，其余用 __poseCloseUp 把相机摆到落地帧后**同一个任务内**探针，
+  // 省掉每次 6.2s 的等待；摆帧只影响那一刻的绘制，不写任何状态。
+  console.log('\n【16e】球很大的边界扫描（临时改实例 nearMinSideRatio，不动 constants.js）');
+  const sweep = [];
+  for (const ratio of [0.86, 1.0, 1.2, 1.4, 1.8]) {
+    await session.eval(`window.__setNearRatio(${ratio})`);
+    await session.eval('window.__begin("auckland","madrid")', { awaitPromise: false });
+    let fp;
+    if (ratio === 1.2) {
+      // 真实时间轴跑到停留段（球最大），顺便给老板留一张"溢出画面"的对照图
+      await session.waitFor(
+        'window.__globe.state.running === true && window.__globe.state.progress >= 1',
+        { timeoutMs: 8000, intervalMs: 60, label: 'ratio=1.2 进入停留段' },
+      );
+      fp = await session.eval('window.__frameProbe()');
+      await shot('24-relax-ratio120-closeup-1440x900');
+    } else {
+      await sleep(900);
+      fp = await session.eval('window.__poseCloseUp()');
+    }
+    await session.eval('window.__globe.cancel()');
+    const ok = fp && fp.ok === true;
+    sweep.push({
+      ratio,
+      ok,
+      R: ok ? fp.R : 0,
+      diameterOverSide: ok ? fp.ratioFromR : 0,
+      labels: ok ? fp.rects.length : 0,
+      labelsInside: ok ? fp.rects.every((r) => r.inside) : false,
+      dots: ok ? fp.dots.length : 0,
+      dotsInside: ok ? fp.dots.every((d) => d.inside) : false,
+      minDotAlpha: ok && fp.dots.length ? Math.min(...fp.dots.map((d) => d.pixel[3])) : 0,
+      minDotR: ok && fp.dots.length ? Math.min(...fp.dots.map((d) => d.r)) : 0,
+    });
+    const s = sweep[sweep.length - 1];
+    console.log(
+      `    nearRatio=${ratio.toFixed(2)}  R=${s.R.toFixed(1)}px  直径/短边=${s.diameterOverSide.toFixed(3)}` +
+        `  ${s.diameterOverSide > 1 ? `溢出 ${((s.diameterOverSide - 1) * 100).toFixed(0)}%` : '不溢出'}` +
+        `  标签 ${s.labels} 个${s.labelsInside ? '全在画面内' : '**有出界**'}` +
+        `  针脚 ${s.dots} 个${s.dotsInside ? '在画面内' : '**出界**'}（最小 alpha ${s.minDotAlpha}）`,
+    );
+  }
+  await session.eval('window.__setNearRatio(0.86)'); // 还原成交付值
+  const s086 = sweep.find((s) => s.ratio === 0.86);
+  const s18 = sweep.find((s) => s.ratio === 1.8);
+  const restored = await session.eval('window.__globe._cfg.nearMinSideRatio');
+  check(
+    '★ 交付值 0.86：球径 = 短边 × 0.86（不溢出），标签与针脚全部在画面内',
+    !!s086 && s086.ok && Math.abs(s086.diameterOverSide - 0.86) < 0.005 && s086.labelsInside && s086.dotsInside && s086.minDotAlpha > 200,
+    s086
+      ? `R=${s086.R.toFixed(1)}px，直径/短边=${s086.diameterOverSide.toFixed(4)}，标签 ${s086.labels} 个，针脚 ${s086.dots} 个（最小 alpha ${s086.minDotAlpha}）`
+      : 'n/a',
+  );
+  check(
+    '★ 边界韧性：即使把近景拉到 1.4x/1.8x（球直径超过短边、画面明显溢出），标签仍被钳制在画面内、针脚仍指向城市',
+    !!s18 && s18.ok && s18.diameterOverSide > 1.6 && s18.labelsInside && s18.dotsInside && s18.minDotAlpha > 200,
+    s18
+      ? `1.8x：R=${s18.R.toFixed(1)}px，直径/短边=${s18.diameterOverSide.toFixed(3)}（溢出 ${((s18.diameterOverSide - 1) * 100).toFixed(0)}%），` +
+        `标签 ${s18.labels} 个${s18.labelsInside ? '全在画面内' : '**有出界**'}，针脚 ${s18.dots} 个（最小 alpha ${s18.minDotAlpha}）`
+      : 'n/a',
+  );
+  const sweepErrors = await session.eval('window.__errors');
+  check('边界扫描没有未捕获异常（含临时调参的还原）', sweepErrors.length === 0, sweepErrors.join(' | ') || '无');
+  check(
+    '边界扫描后交付值已还原成 0.86（常量没被动过，只还原了实例配置）',
+    restored === 0.86,
+    `实例 nearMinSideRatio=${restored}`,
+  );
 } catch (err) {
   failed = 1;
   check(`测试装置异常：${err.message}`, false);

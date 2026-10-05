@@ -1,6 +1,6 @@
 // 一次「浏览」的城市挑选与卡片构造。
 // 需求：每次打开网页都重新随机 —— 城市随机、顺序随机、每城随机挑一天。
-import { CARDS_PER_CITY, FORECAST_DAYS, CN_QUOTA, INTL_QUOTA } from './constants.js';
+import { CARDS_PER_CITY, FORECAST_DAYS, FORECAST_DAYS_OUT, CN_QUOTA, INTL_QUOTA } from './constants.js';
 import { shuffled, randInt } from './utils.js';
 import { dailyToDays } from './weather.js';
 
@@ -36,26 +36,44 @@ export function pickCities(cities, { cnQuota = CN_QUOTA, intlQuota = INTL_QUOTA 
  * 否则会出现「标签写着 明天，主温度却是今天的最高温」这种自相矛盾，4~6 岁的孩子会困惑，
  * 也偏离央视《天气预报》「播报当天」的口径。
  * randomDay=true 时才会每城随机挑一天（大屏版用作可选玩法）。
+ *
+ * 每张卡片额外带 `forecast`：主日之后的**两天**（老板要求界面拆成两块 ——
+ * 上面是当前天气/气温，下面是未来两天）。注意 `forecast` **只用于显示**，
+ * 不参与 describeCard() 的播报片段，所以语音仍然只念当前那天。
  * @param {Array} cities 选中的城市
  * @param {Object} byCity 城市 id -> Open-Meteo daily 数据
- * @param {Object} opts { days, perCity, randomDay }
+ * @param {Object} opts { days, perCity, randomDay, forecastDays }
  */
 export function buildCards(cities, byCity, opts = {}) {
-  const { days = FORECAST_DAYS, perCity = CARDS_PER_CITY, randomDay = false } = opts;
+  const {
+    days = FORECAST_DAYS, perCity = CARDS_PER_CITY,
+    randomDay = false, forecastDays = FORECAST_DAYS_OUT,
+  } = opts;
   const cards = [];
   for (const city of cities) {
     const list = dailyToDays(byCity[city.id], days);
     if (!list.length) {
       // 完全拿不到数据时不跳过城市，用占位天气，界面照常展示
       for (let d = 0; d < perCity; d++) {
-        cards.push({ city, day: { code: 2, tMax: 24, tMin: 16, date: null }, dayIndex: d % days });
+        cards.push({
+          city,
+          day: { code: 2, tMax: 24, tMin: 16, date: null },
+          dayIndex: d % days,
+          forecast: [],
+        });
       }
       continue;
     }
     const start = randomDay ? randInt(list.length) : 0;
     for (let k = 0; k < perCity; k++) {
       const dayIndex = (start + k) % list.length;
-      cards.push({ city, day: list[dayIndex], dayIndex });
+      // 主日之后的连续 forecastDays 天（循环回卷，寒暑假长也能取满）
+      const forecast = [];
+      for (let f = 1; f <= forecastDays; f++) {
+        const item = list[(dayIndex + f) % list.length];
+        if (item) forecast.push({ ...item, dayIndex: (dayIndex + f) % list.length });
+      }
+      cards.push({ city, day: list[dayIndex], dayIndex, forecast });
     }
   }
   return cards;

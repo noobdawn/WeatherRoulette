@@ -2477,6 +2477,9 @@ export class Globe {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     ctx.clearRect(0, 0, view.w, view.h);
     ctx.globalAlpha = 1;
+    // 诊断：本帧实际画出来的标签矩形与标记位置（每帧重置，只反映当前帧）
+    run.labelRects = [];
+    run.markerDots = [];
     this._drawSilhouette(ctx, run);
     this._drawArc(ctx, run, run.easeS == null ? 1 : run.easeS);
     this._drawMarkers(ctx, run, run.progress, run.holding === true, 1);
@@ -2584,6 +2587,7 @@ export class Globe {
 
     if (originA > 0.01 && run.from) {
       this._drawMarker(ctx, run, run.from, COLORS.origin, originA * alpha, {
+        which: 'from',
         label: true,
         labelAbove: true,
         pulse: 0,
@@ -2592,6 +2596,7 @@ export class Globe {
     }
     if (destA > 0.01 && run.to) {
       this._drawMarker(ctx, run, run.to, COLORS.dest, destA * alpha, {
+        which: 'to',
         label: true,
         labelAbove: false,
         pulse: run.pulse,
@@ -2647,7 +2652,13 @@ export class Globe {
 
     if (opts.label) {
       const size = clamp(view.R * 0.095, 16, 36);
-      drawCityLabel(ctx, view, x, y, baseR, city.zh, city.en, size, a, color, opts.labelAbove);
+      const rect = drawCityLabel(ctx, view, x, y, baseR, city.zh, city.en, size, a, color, opts.labelAbove);
+      // 诊断：把标签矩形记下来，供自测断言「球很大时标签有没有被挤出画面/叠成一团」
+      if (rect && run.labelRects) run.labelRects.push(rect);
+    }
+    // 诊断：标记（针脚）实际画在哪里，供自测用像素核对「针脚是否指向城市」
+    if (run.markerDots) {
+      run.markerDots.push({ which: opts.which || '', x, y, r: baseR, color, alpha: a, depth });
     }
     ctx.restore();
   }
@@ -2701,6 +2712,8 @@ function drawCityLabel(ctx, view, x, markerY, markerR, zh, en, size, alpha, acce
     ctx.fillText(en, left + w / 2, cursor + enSize * 0.65);
   }
   ctx.restore();
+  // 返回实际画出来的矩形（已经过边界钳制），供自测断言用
+  return { left, top, w, h, zh, en, size };
 }
 
 function hexToRgba(hex, a) {

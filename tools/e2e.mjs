@@ -460,6 +460,55 @@ if (!isLarge) {
 check('页面无横向溢出', typography.scrollW <= typography.viewport.w + 2,
   `scrollWidth=${typography.scrollW} vs viewport=${typography.viewport.w}`);
 
+// ---- 天气界面拆两块：上=当前（字号不变），下=未来两天（小字）----
+if (!isLarge) {
+  const fc = await session.eval(`(() => {
+    const now = document.getElementById('now-block');
+    const block = document.getElementById('forecast-block');
+    const list = document.getElementById('forecast-list');
+    if (!now || !block || !list) return { missing: true };
+    const rows = [...list.querySelectorAll('.fc-row')];
+    const fs = (el) => (el ? parseFloat(getComputedStyle(el).fontSize) : null);
+    return {
+      nowTop: now.getBoundingClientRect().top,
+      blockTop: block.getBoundingClientRect().top,
+      blockHidden: block.hidden,
+      rowCount: rows.length,
+      rows: rows.map((r) => ({
+        day: r.querySelector('.fc-day')?.textContent?.trim() ?? '',
+        range: r.querySelector('.fc-range')?.textContent?.trim() ?? '',
+        hasIcon: Boolean(r.querySelector('.fc-icon svg, .fc-icon .icon-fallback')),
+        fs: parseFloat(getComputedStyle(r).fontSize),
+      })),
+      cityFs: fs(document.getElementById('city-zh')),
+      tempFs: fs(document.getElementById('temp-c')),
+      cityTop: document.getElementById('city-zh')?.getBoundingClientRect().top ?? null,
+    };
+  })()`);
+
+  check('天气界面已拆成两块（#now-block / #forecast-block）', !fc.missing);
+  if (!fc.missing) {
+    check('第二块在第一块下方', fc.blockTop > fc.nowTop,
+      `now.top=${Math.round(fc.nowTop)} forecast.top=${Math.round(fc.blockTop)}`);
+    check('第一块仍在（当前天气与气温）',
+      fc.tempFs != null && fc.cityTop != null, `城市名 ${fc.cityFs?.toFixed(0)}px / 温度 ${fc.tempFs?.toFixed(0)}px`);
+    check('主块字号与拆分前一致（城市名 ≥ 48px、温度 ≥ 48px）',
+      fc.cityFs >= 48 && fc.tempFs >= 48,
+      `城市名 ${fc.cityFs?.toFixed(1)}px、温度 ${fc.tempFs?.toFixed(1)}px`);
+    check('第二块显示未来两天（2 行）', fc.rowCount === 2 && fc.blockHidden === false,
+      `${fc.rowCount} 行，hidden=${fc.blockHidden}`);
+    check('每行都有日期 / 图标 / 温度区间',
+      fc.rows.length > 0 && fc.rows.every((r) => r.day && r.hasIcon && /^\d+~\d+°C$/.test(r.range)),
+      fc.rows.map((r) => `${r.day} ${r.range}${r.hasIcon ? '' : '(无图标)'}`).join(' | '));
+    check('预报行字号明显小于主块（≤ 主块城市名的 1/3）',
+      fc.rows.length > 0 && fc.rows[0].fs <= fc.cityFs / 3,
+      `预报 ${fc.rows[0]?.fs?.toFixed(1)}px vs 城市名 ${fc.cityFs?.toFixed(1)}px`);
+    check('预报行不含华氏度（老板要求移除）',
+      fc.rows.every((r) => !r.range.includes('°F')),
+      fc.rows.map((r) => r.range).join(' | '));
+  }
+}
+
 console.log('\n[3] 交互与播报链路');
 if (CLICK_START) {
   // 这版是「进去就自动播报」：index.html 里根本没有 #start-overlay / #btn-start。

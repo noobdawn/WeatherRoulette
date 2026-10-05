@@ -1103,6 +1103,108 @@ window.__backdropProbe = (g) => {
   };
 };
 
+// ── 球很大时的边界探针：标签矩形 / 针脚位置 / 像素核对 ──────────
+// 老板把两端改成贴地特写（球占短边 86%）后，"球很大"成了新的风险面：
+// 标签会不会被挤出画面、针脚是否还压在城市上、可见点是否还在球面圆盘内。
+// 判据全部用**当前帧真实画出来的**矩形与像素，而不是把公式重算一遍。
+window.__frameProbe = () => {
+  const g = window.__globe;
+  const run = g._run;
+  const v = g.viewport;
+  const c = document.querySelector('.wr-globe-overlay-fx');
+  if (!run || !c) return { ok: false, error: '没有正在跑的过场' };
+  const ctx = c.getContext('2d');
+  const px = (x, y) => {
+    const ix = Math.max(0, Math.min(c.width - 1, Math.round(x)));
+    const iy = Math.max(0, Math.min(c.height - 1, Math.round(y)));
+    return [...ctx.getImageData(ix, iy, 1, 1).data];
+  };
+  const rects = (run.labelRects || []).map((r) => ({
+    left: r.left,
+    top: r.top,
+    right: r.left + r.w,
+    bottom: r.top + r.h,
+    w: r.w,
+    h: r.h,
+    zh: r.zh,
+    // 四边都在画面内（代码本来就把矩形钳制在 [8, w-8] × [6, h-6] 内）
+    inside: r.left >= 0 && r.top >= 0 && r.left + r.w <= v.w && r.top + r.h <= v.h,
+  }));
+  const dots = (run.markerDots || []).map((d) => ({
+    which: d.which,
+    x: d.x,
+    y: d.y,
+    r: d.r,
+    color: d.color,
+    alpha: d.alpha,
+    // 针脚位置要在画面内；这一点的像素必须真被画了东西（标记/标签底）
+    inside: d.x >= 0 && d.x <= v.w && d.y >= 0 && d.y <= v.h,
+    pixel: px(d.x, d.y),
+  }));
+  return {
+    ok: true,
+    R: v.R,
+    ratio: v.ratio,
+    side: v.side,
+    viewport: { w: v.w, h: v.h },
+    canvas: { w: c.width, h: c.height },
+    rects,
+    dots,
+    // 照实测 R 反推「球直径 ÷ 短边」，用来核对「两端 = 短边 × 0.86」
+    ratioFromR: (2 * v.R) / Math.min(v.w, v.h),
+  };
+};
+
+/** 球内 / 球外的像素取样，用来确认大球确实画到了它该到的地方。 */
+window.__discProbe = () => {
+  const g = window.__globe;
+  const v = g.viewport;
+  const cap = g.captureFrame();
+  if (!cap) return null;
+  const at = (x, y) => {
+    const ix = Math.max(0, Math.min(cap.width - 1, Math.round(x * cap.scale)));
+    const iy = Math.max(0, Math.min(cap.height - 1, Math.round(y * cap.scale)));
+    const row = cap.flipY ? cap.height - 1 - iy : iy;
+    const i = (row * cap.width + ix) * 4;
+    return [cap.rgba[i], cap.rgba[i + 1], cap.rgba[i + 2], cap.rgba[i + 3]];
+  };
+  const r = v.R;
+  return {
+    R: r,
+    ratio: v.ratio,
+    side: v.side,
+    viewport: { w: v.w, h: v.h },
+    insideX: at(v.cx + r * 0.9, v.cy),
+    outsideX: at(v.cx + r * 1.1, v.cy),
+    insideY: at(v.cx, v.cy + r * 0.9),
+    outsideY: at(v.cx, v.cy + r * 1.1),
+    diameterOverSide: (2 * r) / v.side,
+    fitsOnShortSide: r * 2 <= v.side + 1e-6,
+    overflow: Math.max(0, (r * 2) / v.side - 1),
+  };
+};
+
+// ── 临时改 nearMinSideRatio（**只改内存里的实例配置，不动 constants.js**）──
+// 用途：回答「如果老板要球更大 / 溢出画面会怎样」，同时也是"球很大时"边界检查的一部分。
+window.__setNearRatio = (v) => {
+  const g = window.__globe;
+  g._cfg.nearMinSideRatio = Number(v);
+  return g._cfg.nearMinSideRatio;
+};
+
+/**
+ * 把当前过场**摆到落地帧（t=1，两端特写、球最大）并立即探针**。
+ * 摆帧与探针必须在同一个 JS 任务里完成 —— 分成两次 eval 的话，中间会被 rAF 覆盖回真实进度。
+ * 只用于边界扫描（省掉每次 6.2s 的等待），主验收仍走真实时间轴。
+ */
+window.__poseCloseUp = () => {
+  const g = window.__globe;
+  const run = g._run;
+  if (!run) return { ok: false, error: '没有正在跑的过场' };
+  g._draw(run, run.dur);
+  return window.__frameProbe();
+};
+
 // ── 强制 WebGL 不可用（模拟老设备 / 驱动黑名单）────────────────
 let savedGetContext = null;
 window.__forceNoWebGL = (on = true) => {

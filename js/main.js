@@ -598,6 +598,8 @@ async function renderCard(screen, card, index, total, imageManifest, { preload =
     dayIndex: card.dayIndex,
     cardIndex: index,
     total,
+    // 未来两天（只看不念）：卡片上带的 forecast 原样交给渲染层
+    forecast: card.forecast ?? [],
   });
   if (!preload) return desc;
 

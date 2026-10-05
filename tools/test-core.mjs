@@ -239,6 +239,42 @@ check('没有天气数据时占位卡片也有合法 dayIndex', () => {
   assert.equal(cards.length, 3);
   for (const c of cards) assert.ok(c.dayIndex >= 0 && c.dayIndex < 3, `dayIndex 越界：${c.dayIndex}`);
 });
+
+check('buildCards 带出未来两天（界面第二块用，只显示不播报）', () => {
+  const days = ['2026-10-04', '2026-10-05', '2026-10-06'];
+  const byCity = {};
+  for (const c of cities) {
+    byCity[c.id] = {
+      time: days, weather_code: [0, 61, 71],
+      temperature_2m_max: [26, 22, 5], temperature_2m_min: [18, 15, -2],
+      precipitation_probability_max: [5, 80, 90],
+      wind_speed_10m_max: [10, 20, 30], apparent_temperature_max: [25, 21, 3],
+    };
+  }
+  const picked = pickCities(cities);
+  const cards = buildCards(picked, byCity);
+  for (const card of cards) {
+    assert.ok(Array.isArray(card.forecast), `${card.city.id} 的 forecast 不是数组`);
+    assert.equal(card.forecast.length, 2, `${card.city.id} 的 forecast 不是 2 天`);
+    // dayIndex 必须与主日连续（明天、后天），界面上的日期标签才不会跳
+    assert.equal(card.forecast[0].dayIndex, 1);
+    assert.equal(card.forecast[1].dayIndex, 2);
+    assert.equal(card.forecast[0].date, days[1]);
+    assert.equal(card.forecast[0].tMax, 22);
+    assert.equal(card.forecast[1].date, days[2]);
+    assert.equal(card.forecast[1].tMax, 5);
+    // 主日必须与 forecast[0] 不同天，否则第二块会出现「明天=今天」
+    assert.notEqual(card.day.date, card.forecast[0].date);
+  }
+});
+
+check('没有天气数据时 forecast 为空数组（界面据此整块隐藏）', () => {
+  const picked = pickCities(cities).slice(0, 3);
+  for (const c of buildCards(picked, {})) {
+    assert.ok(Array.isArray(c.forecast), 'forecast 不是数组');
+    assert.equal(c.forecast.length, 0, '拿不到数据时 forecast 应为空');
+  }
+});
 check('describeCard 文案与音频片段一致', () => {
   const card = {
     city: cities.find((c) => c.id === 'jinan'),

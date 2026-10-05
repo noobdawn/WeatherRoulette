@@ -132,10 +132,11 @@ console.log(
   `  ${missingIds.length === 0 ? '✓' : '✗'} 主页面 ${seenSelectors.length} 处 id 选择器全部命中`,
 );
 
-// index.html 必需的 id（极简版契约：满屏壁纸 + 居中大字 + 角落两个小按钮 + 隐藏状态位）
+// index.html 必需的 id（极简版契约：满屏壁纸 + 居中大字两块 + 角落两个小按钮 + 隐藏状态位）
 const REQUIRED = [
   'app', 'bg', 'bg-img-a', 'bg-img-b', 'bg-scene', 'card', 'city-zh', 'city-en',
-  'weather-row', 'weather-icon', 'weather-zh', 'weather-en', 'temp-row', 'temp-c',
+  'now-block', 'weather-row', 'weather-icon', 'weather-zh', 'weather-en', 'temp-row', 'temp-c',
+  'forecast-block', 'forecast-list',
   'btn-pause', 'btn-music', 'sr-only-status',
 ];
 const lostIds = REQUIRED.filter((id) => !entryIds.has(id));

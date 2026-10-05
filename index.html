@@ -31,20 +31,31 @@
     <!-- 图片全部加载失败时的插画兜底层（screen.js 加 .is-fallback + data-char）；正常有照片时完全不可见 -->
     <div id="bg-scene" aria-hidden="true"></div>
 
-    <!-- 前景：居中大字。没有面板底色 / 边框 / 模糊，文字直接压在照片上 -->
+    <!-- 前景：居中大字。没有面板底色 / 边框 / 模糊，文字直接压在照片上。
+         按老板要求分成两块：
+           第一块 #now-block —— 当前天气与气温，字号与原来一致（主体）
+           第二块 #forecast-block —— 未来两天，字号小，整体简洁，放在第一块下方
+         #forecast-list 的行由 screen.js 动态生成（行数 = FORECAST_DAYS_OUT） -->
     <main id="card" aria-live="polite">
       <div id="card-day" class="day-label"></div>
       <h1 id="city-zh"></h1>
       <p id="city-en"></p>
-      <div id="weather-row">
-        <div id="weather-icon"></div>
-        <div class="weather-text">
-          <span id="weather-zh"></span>
-          <span id="weather-en"></span>
+
+      <div id="now-block">
+        <div id="weather-row">
+          <div id="weather-icon"></div>
+          <div class="weather-text">
+            <span id="weather-zh"></span>
+            <span id="weather-en"></span>
+          </div>
+        </div>
+        <div id="temp-row">
+          <span id="temp-c"></span>
         </div>
       </div>
-      <div id="temp-row">
-        <span id="temp-c"></span>
+
+      <div id="forecast-block">
+        <ul id="forecast-list"></ul>
       </div>
     </main>
 
