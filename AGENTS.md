@@ -315,12 +315,38 @@ node tools/e2e-offline.mjs                   # 断网后仍能打开并继续播
    }
    ```
 
-5. 交付前抽检乱码特征（0 个才算干净）：
+5. 交付前抽检是否被污染。这里有**两个已经踩过的坑**，务必注意：
+
+   - **不要用「码点范围」当判据**。试过 `[\u95ff-\u9fff]{3,}`，结果把
+     「音频预」「雷阵雨」「静默降」「页面骨」这些**正常汉字**全判成乱码（误报 11 个文件）。
+     GBK 误读 UTF-8 的产物大量落在与正常汉字相同的区段，范围判别根本不可用。
+   - **不要在被检文件里写检测正则**（自指）。正则的字符类会匹配到自己——
+     本文档一度因此报了 6 处「乱码」，其实全是检测命令本身。
+
+   正确做法：**用精确乱码字符集，且脚本放在被检文件之外**：
 
    ```powershell
-   $t = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($p))
-   ([regex]::Matches($t, '锟|閿|鐗|鍓|閲|鈥')).Count
+   # 存成 check-encoding.ps1 再执行（不要写进被检文件）：
+   #   pwsh -File check-encoding.ps1 -Path F:\Github\WeatherRoulette
+   param([Parameter(Mandatory)][string]$Path)
+   # GBK 误读 UTF-8 后最常出现的字符（「核心逻辑自测」→「鏍稿績閫昏緫鑷祴」这类产物）
+   $mojibake = '锟閿鐗鍓閲鈥鎾姤澶╂皵鐨勪簡鏄笉鍦ㄦ湁缂撳瓨鍔犺浇棰勮'
+   $bad = 0
+   Get-ChildItem $Path -Recurse -File -Include *.md,*.js,*.mjs,*.json,*.html,*.css,*.py,*.ps1,*.yml |
+     Where-Object { $_.FullName -notmatch '\\\.git\\' } | ForEach-Object {
+       $t = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($_.FullName))
+       $hits = 0
+       foreach ($c in $mojibake.ToCharArray()) { if ($t.Contains($c)) { $hits++ } }
+       $fffd = ([regex]::Matches($t, [char]0xFFFD)).Count
+       if ($hits -gt 0 -or $fffd -gt 0) { Write-Host "? $($_.Name) 乱码字符 $hits  替换字符 $fffd"; $bad++ }
+     }
+   Write-Host "可疑文件 $bad 个"
    ```
+
+   实测这套判据在当前仓库扫描 46 个文本文件结果为 **0**，且不会误报正常中文。
+
+   最省事的办法仍然是：直接用 `read` 工具打开文件看中文是否正常。
+   经验：**只要改动是通过 `read`/`edit`/`write` 工具做的，就不会有编码问题**。
 
 6. `.gitattributes` 里已设 `* text=auto eol=lf` 并对二进制资源声明 `binary`，
    避免跨平台换行与二进制被改写。
