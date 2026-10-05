@@ -1,7 +1,8 @@
-// 主流程：加载数据 → 随机选城 → 取实时天气 → 预加载音频 → 用户点击后开始播报。
+// 主流程：加载数据 → 随机选城 → 取实时天气 → 预下载语音 → 自动开始播报。
 // 每次打开页面的城市、顺序、壁纸、当天天气都不同；一轮播完自动重新随机，无限循环。
+// 城市之间会插入 3D 地球过场动画（js/ui/globe.js），帮孩子建立地理认知。
 import { domReady, fetchJSON, registerServiceWorker, installErrorOverlay } from './core/boot.js';
-import { AUDIO, WEATHER_TTL } from './core/constants.js';
+import { AUDIO, WEATHER_TTL, GLOBE } from './core/constants.js';
 import { describeCard, dayLabel, dayLabelEn } from './core/format.js';
 import { loadWeather, dailyToDays } from './core/weather.js';
 import { pickCities, buildCards, uniqueCities } from './core/cards.js';
@@ -13,6 +14,7 @@ import { MusicPlayer } from './audio/music.js';
 import { Broadcaster } from './audio/player.js';
 import { Screen } from './ui/screen.js';
 import { LoadingScreen } from './ui/loading.js';
+import { Globe } from './ui/globe.js';
 import { loadImageManifest, resolveCityImage } from './ui/assets.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -321,10 +323,21 @@ async function boot() {
     return currentCards;
   }
 
+  // 3D 地球过场：每两城之间从上一城的视角转到下一城（始终正北朝上）。
+  // 这里只负责「什么时候放」，渲染与相机数学都在 js/ui/globe.js。
+  const globe = GLOBE.enabled ? new Globe(document) : null;
+
   const broadcaster = new Broadcaster({
     cardsProvider: nextCards,
     loader,
     music,
+    // 过场钩子：Broadcaster 会在「上一城播完、下一城开始」之间 await 它
+    transition: globe
+      ? async ({ from, to }) => {
+          if (globe.supported === false) return;
+          await globe.showTransition(from, to);
+        }
+      : null,
     hooks: {
       onCardStart(index, card, total) {
         renderCard(screen, card, index, total, imageManifest);
@@ -446,6 +459,8 @@ async function boot() {
       screen.setPaused(false);
     } else {
       broadcaster.pause();
+      // 暂停时把地球过场也收掉，否则会停在动画中间一帧，看着像卡住
+      globe?.cancel();
       // Broadcaster.pause() 只更新自己的状态并发 onProgress，不会碰界面；
       // 暂停的视觉反馈（左上角小指示）必须在这里显式同步，否则点了没任何反应。
       screen.setPaused(true);
@@ -453,15 +468,25 @@ async function boot() {
   };
   const appEl = $('#app');
   appEl?.addEventListener('click', togglePause);
+
+  /** 切城/重新洗牌时也要收掉过场，避免动画与新卡片打架 */
+  const withGlobeCancelled = (fn) => (...args) => {
+    globe?.cancel();
+    return fn(...args);
+  };
+
   // 调试钩子：自动化测试与现场排查都靠它读播放状态，避免"点了没反应"无从定位
   window.__wr = {
     get state() { return broadcaster.state; },
     get contrast() { return screen.lastAnalysis ?? null; },
     get textOn() { return screen.textOn; },
+    /** 地球过场状态：{ running, from, to, progress } */
+    get globe() { return globe?.state ?? null; },
+    globeRef: globe,
     togglePause,
-    next: () => broadcaster.next(),
-    prev: () => broadcaster.prev(),
-    reshuffle: () => broadcaster.reshuffle(),
+    next: withGlobeCancelled(() => broadcaster.next()),
+    prev: withGlobeCancelled(() => broadcaster.prev()),
+    reshuffle: withGlobeCancelled(() => broadcaster.reshuffle()),
     hasAppListener: Boolean(appEl),
   };
 

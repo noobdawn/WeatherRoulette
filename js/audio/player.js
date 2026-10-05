@@ -14,6 +14,9 @@
 //   - onCardStart 的第三个参数是 total，js/main.js 需要它来算进度。
 //   - get total / index / playing / paused / finished / cards / speech / loader / music
 //   - setCards(cards) / stop() / start(index) / reshuffle(cards) 可选传参
+//   - transition: 城市之间的过场钩子（3D 地球动画）。签名
+//       async transition({ from, to, index, total }) -> void
+//     在「上一城播完、下一城开始」之间 await 它。抛错只记 onError，绝不让播报停摆。
 import { AUDIO } from '../core/constants.js';
 import { describeCard } from '../core/format.js';
 import { shuffled } from '../core/utils.js';
@@ -24,10 +27,15 @@ import { SpeechSequencer } from './speech.js';
 const PREFETCH_SEGMENTS = 4;
 
 export class Broadcaster {
-  constructor({ cards = [], cardsProvider = null, loader, music = null, hooks = {} } = {}) {
+  constructor({
+    cards = [], cardsProvider = null, loader, music = null, hooks = {},
+    /** 城市之间的过场（可选）：async ({from, to, index, total}) => void */
+    transition = null,
+  } = {}) {
     this.cards = Array.isArray(cards) ? cards : [];
     /** 返回下一批卡片的函数（可选）：给了它就一轮接一轮自动播下去 */
     this.cardsProvider = typeof cardsProvider === 'function' ? cardsProvider : null;
+    this.transition = typeof transition === 'function' ? transition : null;
     this.loader = loader;
     this.music = music || null;
     this.hooks = hooks || {};
@@ -252,8 +260,36 @@ export class Broadcaster {
       this._index = i;
       await this.#playCard(i, this.cards[i], signal, token, i === from ? startSegment : 0);
       if (token !== this._token || signal.aborted) return false;
+      // 城市之间的过场（3D 地球）：在这一城播完、下一城开始之前
+      if (i + 1 < this.cards.length) {
+        await this.#runTransition(this.cards[i], this.cards[i + 1], i, signal, token);
+        if (token !== this._token || signal.aborted) return false;
+      }
     }
     return true;
+  }
+
+  /**
+   * 执行城市之间的过场动画。约定：
+   *   - 过场期间视为「还没开始下一城」，卡片文字保持上一城不动
+   *   - 任何异常都只记 onError，绝不让播报停摆
+   *   - 被中断（切城/暂停/停止）时立刻返回，过场组件由它自己负责收场
+   */
+  async #runTransition(fromCard, toCard, i, signal, token) {
+    if (!this.transition || !fromCard || !toCard) return;
+    if (token !== this._token || signal.aborted) return;
+    this.#emit('onProgress', { index: i, total: this.cards.length, phase: 'transition' });
+    try {
+      await this.transition({
+        from: fromCard.city ?? fromCard,
+        to: toCard.city ?? toCard,
+        index: i,
+        total: this.cards.length,
+        signal,
+      });
+    } catch (err) {
+      this.#emit('onError', err);
+    }
   }
 
   /** 从 cardsProvider 取下一批卡片；失败不抛，返回 false */

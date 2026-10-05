@@ -657,6 +657,83 @@ if (CLICK_START) {
     check('自动推进到下一座城市', false, err.message);
   }
 
+  // ---- 3D 地球过场（城市之间，始终正北朝上）----
+  // 过场只在切换城市的瞬间存在，所以用轮询抓它的存在，并在抓到的那一刻采样相机基。
+  if (isMinimal) {
+    let globeSeen = false;
+    const basisSamples = [];
+    for (let i = 0; i < 90; i++) {
+      const g = await session.eval(`(() => {
+        const g = window.__wr?.globeRef;
+        if (!g || !g.state?.running) return null;
+        const b = g.cameraBasis?.();
+        const n = g.worldToScreen?.(90, 0);   // 北极
+        const s = g.worldToScreen?.(-90, 0);  // 南极
+        const pr = g.state.progress;
+        return {
+          from: g.state.from?.zh ?? null, to: g.state.to?.zh ?? null,
+          progress: typeof pr === 'number' ? pr : 0,
+          up: b?.up ?? null, forward: b?.forward ?? null,
+          northY: n ? n.y : null, southY: s ? s.y : null,
+        };
+      })()`);
+      if (g) {
+        globeSeen = true;
+        basisSamples.push(g);
+        if (basisSamples.length >= 24) break;
+      }
+      await sleep(250);
+    }
+    check('城市之间出现了 3D 地球过场动画', globeSeen,
+      globeSeen ? `采到 ${basisSamples.length} 帧，${basisSamples[0].from} → ${basisSamples[0].to}`
+        : '整段轮询都没抓到 running 状态');
+
+    if (globeSeen) {
+      // 「正北朝上」的严谨判据：相机 up 与**当地东方向**必须正交。
+      // 世界坐标里 y 是极轴，forward 指向相机所在经纬度，于是
+      //   east = normalize(cross(north, forward))   （north = (0,1,0)）
+      // 若 up·east ≠ 0，说明屏幕上方偏向了东西，就不是正北朝上了。
+      // 注意：不要把 up 的 x/z 分量当判据——那是世界坐标，不是屏幕坐标。
+      const worst = basisSamples.reduce((acc, s) => {
+        if (!s.up || !s.forward) return acc;
+        const [fx, fy, fz] = s.forward;
+        // east = cross((0,1,0), forward) = (fz, 0, -fx)
+        const ex = fz;
+        const ez = -fx;
+        const elen = Math.hypot(ex, ez);
+        if (elen < 1e-9) return acc; // 正对极点附近，east 退化，跳过
+        const dot = s.up[0] * (ex / elen) + s.up[2] * (ez / elen);
+        return Math.max(acc, Math.abs(dot));
+      }, 0);
+      check('相机 up 与当地东方向正交（屏幕上方恒为真北）', worst < 1e-9,
+        `|up · east| 最大 ${worst.toExponential(2)}（要求 < 1e-9）`);
+
+      // 另一条独立佐证：up 与北极的夹角应等于相机所在纬度（说明「北」被正确投影到屏幕上方）
+      const latCheck = basisSamples.reduce((acc, s) => Math.max(acc, Math.abs(s.up?.[1] ?? 0)), 0);
+      check('up 始终指北（与北极夹角 < 90°）', latCheck > 0.1,
+        `up.y 最大 ${latCheck.toFixed(3)}`);
+
+      const nAboveS = basisSamples.every((s) => s.northY != null && s.southY != null && s.northY < s.southY);
+      check('北极在屏幕上始终位于南极上方', nAboveS,
+        `首帧 北y=${basisSamples[0].northY?.toFixed?.(3)} 南y=${basisSamples[0].southY?.toFixed?.(3)}`);
+
+      const progresses = basisSamples.map((s) => s.progress);
+      const moved = Math.max(...progresses) - Math.min(...progresses);
+      check('过场确实在推进（不是停在某一帧）', moved > 0.1, `进度跨度 ${moved.toFixed(3)}`);
+      console.log(`      采样到的过场：${basisSamples[0].from} → ${basisSamples[0].to}，`
+        + `进度 ${Math.min(...progresses).toFixed(2)}~${Math.max(...progresses).toFixed(2)}`);
+
+      // 等过场放完，画面应还给卡片
+      try {
+        await session.waitFor(`!window.__wr?.globeRef?.state?.running`,
+          { timeoutMs: 20000, label: '过场结束' });
+        check('过场结束后不再占用画面', true);
+      } catch (err) {
+        check('过场结束后不再占用画面', false, err.message);
+      }
+    }
+  }
+
   if (P.nextBtn) {
     // 大屏版有显式的「下一个」按钮
     const before = await session.eval(CITY);

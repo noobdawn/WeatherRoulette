@@ -7,7 +7,7 @@
  *
  * 修改任何资源后请把 CACHE_VERSION 加一，否则老用户会一直看到旧缓存。
  */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CORE_CACHE = `wr-core-${CACHE_VERSION}`;
 const AUDIO_CACHE = `wr-audio-${CACHE_VERSION}`;
 const IMAGE_CACHE = `wr-images-${CACHE_VERSION}`;
@@ -41,6 +41,8 @@ const CORE_ASSETS = [
   './js/audio/player.js',
   './js/ui/screen.js',
   './js/ui/loading.js',
+  './js/ui/globe.js',
+  './js/ui/globe-data.js',
   './js/ui/weather-icon.js',
   './js/ui/assets.js',
   './js/ui/large.js',

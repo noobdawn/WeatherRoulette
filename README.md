@@ -60,9 +60,10 @@ https://noobdawn.github.io/WeatherRoulette/
 | 2 | 每次打开随机打乱播放顺序 | `crypto.getRandomValues` 驱动的 Fisher–Yates 洗牌（`js/core/utils.js`）；每轮播完自动重新随机，无限循环 |
 | 3 | 背景是城市地标壁纸，且随机 | 每城一张免费授权地标实景图（`assets/images/manifest.json`），`primary + fallbacks` 依次降级；全部失败则用「城市首字」卡通插画兜底。图片经 Service Worker 离线缓存 |
 | 4 | 贴近央视《天气预报》的音效 | 背景音乐《渔舟唱晚》持续循环；播报前有留白、句间有停顿，全部节奏参数集中在 `js/core/constants.js` 的 `AUDIO` |
-| 5 | 女播音员腔诵读「济南 多云转晴 十二到二十四度」 | **离线预生成 + 播放时拼接**：把 81 个城市名、14 个天气词、0~42 度的 43 个温度词、3 个连接词分别合成独立 mp3，网页按顺序拼接成整句 |
+| 5 | 女播音员腔诵读「济南 多云转晴 十二到二十四度」 | **离线预生成 + 播放时拼接**：把 81 个城市名、14 个天气词、0~42 度的温度词、43 个纯数字、连接词分别合成独立 mp3，网页按顺序拼接成整句 |
 | 6 | 面向 4~6 岁：字大、中英对照 | 城市名 1440 端 **128px** / 375 端 **54px**，温度 168px / 84px；城市、天气、温度全部中英成对 |
 | 7 | 极简视觉：一张背景 + 前景，自动轮播 | 满屏壁纸铺底，**零蒙版**（`#bg::after` 中线透明度实测 0），居中大字直接压在照片上；所有控制条移除，只留「点一下暂停」与一个很淡的音乐开关 |
+| 8 | 地理认知：城市之间插一段 3D 地球动画 | 每两城之间用约 **5 秒**从上一城转到下一城（如合肥 → 东京），相机 **up 锁定真北**，因此**屏幕上方永远是正北**。陆地/国界用 Natural Earth 110m 简化数据（`js/ui/globe-data.js`，88 KB），Canvas 正交投影实时绘制 |
 
 ### 文字在照片上怎么保证看得清（去掉蒙版的代价）
 
@@ -116,10 +117,10 @@ data/
 js/
   main.js                 主流程装配
   core/                   常量、路径、工具、启动、天气数据、文案、卡片构造
-  audio/                  音频清单、并发加载器、语音拼接、背景音乐、播报调度
-  ui/                     卡片渲染与壁纸亮度适配、天气图标、图片候选与探测
+  audio/                  音频清单、并发加载器、整包预下载、语音拼接、背景音乐、播报调度
+  ui/                     卡片渲染与壁纸亮度适配、加载页、3D 地球过场、天气图标、图片探测
 assets/
-  audio/zh/{city,weather,temp,word}/*.mp3   语音片段（141 个）
+  audio/zh/{city,weather,temp,num,word}/*.mp3  语音片段（183 个）
   audio/music/music.mp3                     背景音乐（自备版本，优先级最高）
   audio/music/yuzhouchangwan.mp3            兜底：程序合成的古筝版（90 秒）
   audio/manifest.json                       片段清单（生成物）
@@ -128,7 +129,10 @@ assets/
 tools/
   serve.py                本地静态服务器（多线程，必须用它，见下方说明）
   gen-audio.py            生成语音片段（调用 edge-tts）
+  trim-audio.py           裁掉语音片段首尾静音（生成片段后必须跑）
   gen-music.py            合成《渔舟唱晚》（numpy 加法合成 + pyav 编码 mp3）
+  gen-globe-data.py       生成 3D 地球用的海岸线/国界数据（Natural Earth 110m）
+  preview-globe-data.py   把地球数据画成 PNG，肉眼核对大陆形状
   precompute-luminance.py 预计算每张壁纸的亮度网格（文字配色用）
   check-images.py         独立校验壁纸清单：覆盖度 + URL 真实可用性
   verify-images.ps1       批量验证壁纸 URL（队友实现，PowerShell 版）

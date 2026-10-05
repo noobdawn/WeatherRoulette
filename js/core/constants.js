@@ -41,6 +41,27 @@ export const AUDIO = {
 /** 音频资产目录约定 */
 export const AUDIO_DIR = 'assets/audio';
 
+/**
+ * 城市之间的 3D 地球过场动画。
+ * 目的：让孩子建立地理认知——从上一城的视角转到下一城（例如合肥 → 东京）。
+ *
+ * 硬约束：整个动画过程中**地球始终保持正北朝上**（相机 up 锁定在真北方向，
+ * 详见 js/ui/globe.js 的相机数学）。不要改成"俯仰角跟着城市纬度走"的做法。
+ */
+export const GLOBE = {
+  /** 总开关：关掉就完全不过场，直接切卡片（排查问题时很方便） */
+  enabled: true,
+  /** 从上一城转到下一城的动画时长（毫秒） */
+  duration: 5000,
+  /** 转到位之后停留多久再交回卡片（让孩子看清目标城市） */
+  holdMs: 1200,
+  /** 覆盖层淡入/淡出时长（毫秒） */
+  fadeMs: 400,
+  /** 相机纬度夹紧：避免在极地附近相机基退化（up 与 dir 共线） */
+  minLat: -85,
+  maxLat: 85,
+};
+
 /** 城市壁纸图源清单（由 assets/images/manifest.json 提供） */
 export const IMAGES_DIR = 'assets/images';
 
@@ -94,6 +115,8 @@ export const CORE_ASSETS = [
   'js/audio/player.js',
   'js/ui/screen.js',
   'js/ui/loading.js',
+  'js/ui/globe.js',
+  'js/ui/globe-data.js',
   'js/ui/weather-icon.js',
   'js/ui/assets.js',
   'js/ui/large.js',

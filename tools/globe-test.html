@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Globe 自测页（不参与线上发布）</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#05070f;color:#dce9ff;
+    font:13px/1.6 'PingFang SC','Microsoft YaHei',system-ui,sans-serif}
+  #hint{position:fixed;left:10px;top:10px;z-index:5;opacity:.55;pointer-events:none}
+  #hint b{color:#ffd166}
+</style>
+</head>
+<body>
+<div id="hint">globe-test.html —— 仅供 <b>tools/globe-test.mjs</b> 自动化自测使用，不参与线上发布</div>
+
+<script type="module">
+// 最小自测页：只引入 globe.js，把断言需要的一切挂到 window 上供 CDP 读取。
+import Globe from '../js/ui/globe.js';
+import * as constants from '../js/core/constants.js';
+
+const FALLBACK_CITIES = {
+  hefei: { id: 'hefei', zh: '合肥', en: 'Hefei', lat: 31.8206, lon: 117.2272 },
+  tokyo: { id: 'tokyo', zh: '东京', en: 'Tokyo', lat: 35.6762, lon: 139.6503 },
+  beijing: { id: 'beijing', zh: '北京', en: 'Beijing', lat: 39.9042, lon: 116.4074 },
+  newyork: { id: 'newyork', zh: '纽约', en: 'New York', lat: 40.7128, lon: -74.006 },
+  paris: { id: 'paris', zh: '巴黎', en: 'Paris', lat: 48.8566, lon: 2.3522 },
+  melbourne: { id: 'melbourne', zh: '墨尔本', en: 'Melbourne', lat: -37.8136, lon: 144.9631 },
+  sydney: { id: 'sydney', zh: '悉尼', en: 'Sydney', lat: -33.8688, lon: 151.2093 },
+  reykjavik: { id: 'reykjavik', zh: '雷克雅未克', en: 'Reykjavik', lat: 64.1466, lon: -21.9426 },
+  singapore: { id: 'singapore', zh: '新加坡', en: 'Singapore', lat: 1.3521, lon: 103.8198 },
+};
+
+let CITIES = { ...FALLBACK_CITIES };
+try {
+  const res = await fetch('../data/cities.json');
+  if (res.ok) {
+    const json = await res.json();
+    for (const c of json.cities || []) {
+      CITIES[c.id] = { id: c.id, zh: c.zh, en: c.en, lat: Number(c.lat), lon: Number(c.lon) };
+    }
+  }
+} catch (err) {
+  console.warn('cities.json 读取失败，用内置城市列表', err);
+}
+
+const globe = new Globe(document);
+/** globe.js 运行时注入的 <style> id（写成变量，避免被 lint-site 当成 index.html 的必需节点）。 */
+const STYLE_ID = 'wr-globe-style';
+window.__globe = globe;
+window.__errors = [];
+window.addEventListener('error', (e) => window.__errors.push(String(e.message || e)));
+window.addEventListener('unhandledrejection', (e) => window.__errors.push('unhandledrejection: ' + String(e.reason)));
+
+/** 造一个经纬度城市（可以超出城市清单，用来压极地/对跖等边界）。 */
+function synth(lat, lon, zh, en) {
+  return { id: `synth_${lat}_${lon}`, zh: zh || '测试点', en: en || 'Test', lat, lon };
+}
+window.__synth = synth;
+window.__city = (id) => CITIES[id] || null;
+window.__cityIds = () => Object.keys(CITIES);
+
+// ────────────────────────────── 逐帧采样：断言「正北朝上」
+let sampling = false;
+let samples = [];
+let skipped = 0;
+
+function eastOf(dir) {
+  const lon = Math.atan2(dir[0], dir[2]);
+  return [Math.cos(lon), 0, -Math.sin(lon)];
+}
+function northTangentOf(dir) {
+  const lat = Math.asin(Math.max(-1, Math.min(1, dir[1])));
+  const lon = Math.atan2(dir[0], dir[2]);
+  return [-Math.sin(lat) * Math.sin(lon), Math.cos(lat), -Math.sin(lat) * Math.cos(lon)];
+}
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+function takeSample() {
+  // 视口还没建立（数据还在 import / 首帧未跑）时跳过，避免把「没有相机」当成一帧
+  const view = globe.viewport;
+  if (!(view.R > 0)) {
+    skipped++;
+    return;
+  }
+  const b = globe.cameraBasis();
+  const east = eastOf(b.dir);
+  const nt = northTangentOf(b.dir);
+  const n = globe.worldToScreen(90, 0);
+  const s = globe.worldToScreen(-90, 0);
+  samples.push({
+    t: performance.now(),
+    upEast: Math.abs(dot3(b.up, east)),
+    upDir: Math.abs(dot3(b.up, b.dir)),
+    upLen: Math.hypot(b.up[0], b.up[1], b.up[2]),
+    rightLen: Math.hypot(b.right[0], b.right[1], b.right[2]),
+    rightDir: Math.abs(dot3(b.right, b.dir)),
+    rightUp: Math.abs(dot3(b.right, b.up)),
+    // up 应当恰好等于相机所在地的「正北切向量」
+    upVsNorth: Math.max(
+      Math.abs(b.up[0] - nt[0]),
+      Math.abs(b.up[1] - nt[1]),
+      Math.abs(b.up[2] - nt[2]),
+    ),
+    northY: n ? n.y : null,
+    southY: s ? s.y : null,
+    // 屏幕 y 向下 ⇒ 北极应比南极小
+    poleGap: n && s ? s.y - n.y : null,
+    progress: globe.state.progress,
+    running: globe.state.running,
+  });
+}
+
+function rafSample() {
+  if (!sampling) return;
+  takeSample();
+  requestAnimationFrame(rafSample);
+}
+
+function summarize() {
+  let maxUpEast = 0;
+  let maxUpDir = 0;
+  let maxUpLenErr = 0;
+  let maxRightLenErr = 0;
+  let maxRightDir = 0;
+  let maxRightUp = 0;
+  let maxUpVsNorth = 0;
+  let minPoleGap = Infinity;
+  let maxPoleGap = -Infinity;
+  let nullPoles = 0;
+  for (const s of samples) {
+    maxUpEast = Math.max(maxUpEast, s.upEast);
+    maxUpDir = Math.max(maxUpDir, s.upDir);
+    maxUpLenErr = Math.max(maxUpLenErr, Math.abs(s.upLen - 1));
+    maxRightLenErr = Math.max(maxRightLenErr, Math.abs(s.rightLen - 1));
+    maxRightDir = Math.max(maxRightDir, s.rightDir);
+    maxRightUp = Math.max(maxRightUp, s.rightUp);
+    maxUpVsNorth = Math.max(maxUpVsNorth, s.upVsNorth);
+    if (s.poleGap == null) nullPoles++;
+    else {
+      minPoleGap = Math.min(minPoleGap, s.poleGap);
+      maxPoleGap = Math.max(maxPoleGap, s.poleGap);
+    }
+  }
+  const spanMs = samples.length > 1 ? samples[samples.length - 1].t - samples[0].t : 0;
+  return {
+    count: samples.length,
+    skipped,
+    spanMs: Math.round(spanMs),
+    sampleFps: spanMs > 0 ? Math.round(((samples.length - 1) * 1000) / spanMs) : 0,
+    maxUpEast,
+    maxUpDir,
+    maxUpLenErr,
+    maxRightLenErr,
+    maxRightDir,
+    maxRightUp,
+    maxUpVsNorth,
+    minPoleGap,
+    maxPoleGap,
+    nullPoles,
+    firstSample: samples[0] || null,
+    lastSample: samples[samples.length - 1] || null,
+  };
+}
+
+// ────────────────────────────── 对外测试 API
+window.__result = null;
+
+window.__runTransition = (fromId, toId) => {
+  const from = CITIES[fromId];
+  const to = CITIES[toId];
+  if (!from || !to) return Promise.reject(new Error(`未知城市 ${fromId} / ${toId}`));
+  return window.__runPair(from, to);
+};
+
+/** 同上，但直接给城市对象（用来压极地 / 对跖等边界）。 */
+window.__runPair = (from, to) => {
+  samples = [];
+  skipped = 0;
+  sampling = true;
+  requestAnimationFrame(rafSample);
+  const t0 = performance.now();
+  return globe.showTransition(from, to).then(() => {
+    sampling = false;
+    const summary = summarize();
+    const r = {
+      ms: Math.round(performance.now() - t0),
+      runningAfter: globe.state.running,
+      attachedAfter: globe.attached,
+      overlayInDom: !!document.querySelector('.wr-globe-overlay'),
+      progressAfter: globe.state.progress,
+      stateFrames: globe.state.frames,
+      stateFps: globe.state.fps,
+      summary,
+    };
+    window.__result = r;
+    return r;
+  });
+};
+
+/** 动画进行中途读一次覆盖层的几何/样式信息。 */
+window.__overlayInfo = () => {
+  const el = document.querySelector('.wr-globe-overlay');
+  if (!el) return null;
+  const cs = getComputedStyle(el);
+  const canvas = el.querySelector('canvas');
+  return {
+    className: el.className,
+    position: cs.position,
+    zIndex: cs.zIndex,
+    pointerEvents: cs.pointerEvents,
+    inset: [cs.top, cs.right, cs.bottom, cs.left].join(','),
+    ariaHidden: el.getAttribute('aria-hidden'),
+    canvasWidth: canvas ? canvas.width : 0,
+    canvasHeight: canvas ? canvas.height : 0,
+    styleTagCount: document.getElementById(STYLE_ID) ? 1 : 0,
+    running: globe.state.running,
+  };
+};
+
+/** 圆盘内 / 可见性正确性：全经纬网格逐点核对。 */
+window.__checkDisc = () => {
+  const view = globe.viewport;
+  if (!(view.R > 0)) return { error: '视口尚未建立（还没跑过 showTransition）' };
+  let maxR = 0;
+  let visibleMismatch = 0;
+  let outsideDisc = 0;
+  let nullCount = 0;
+  let checked = 0;
+  const b = globe.cameraBasis();
+  for (let lat = -90; lat <= 90; lat += 3) {
+    for (let lon = -180; lon <= 180; lon += 3) {
+      const p = globe.worldToScreen(lat, lon);
+      if (!p) {
+        nullCount++;
+        continue;
+      }
+      checked++;
+      const r = Math.hypot(p.nx, p.ny);
+      maxR = Math.max(maxR, r);
+      const la = (lat * Math.PI) / 180;
+      const lo = (lon * Math.PI) / 180;
+      const v = [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)];
+      const depth = v[0] * b.dir[0] + v[1] * b.dir[1] + v[2] * b.dir[2];
+      if (p.visible !== depth >= 0) visibleMismatch++;
+      const dx = p.x - view.cx;
+      const dy = p.y - view.cy;
+      if (Math.hypot(dx, dy) > view.R * (1 + 1e-9)) outsideDisc++;
+    }
+  }
+  return { checked, nullCount, maxNormRadius: maxR, visibleMismatch, outsideDisc, view };
+};
+
+/** 打断场景：中途 cancel()，Promise 也必须 resolve。 */
+window.__runCancel = (afterMs = 900) =>
+  new Promise((resolve) => {
+    const from = CITIES.hefei;
+    const to = CITIES.newyork;
+    let settled = false;
+    const t0 = performance.now();
+    const p = globe.showTransition(from, to);
+    p.then(() => {
+      settled = true;
+    });
+    setTimeout(() => {
+      const settledBeforeCancel = settled;
+      const attachedBeforeCancel = globe.attached;
+      const cancelAt = performance.now();
+      globe.cancel();
+      const runningRightAfterCancel = globe.state.running;
+      const attachedRightAfterCancel = globe.attached;
+      p.then(() => {
+        resolve({
+          settledBeforeCancel,
+          attachedBeforeCancel,
+          runningRightAfterCancel,
+          attachedRightAfterCancel,
+          msAfterCancel: Math.round(performance.now() - cancelAt),
+          msTotal: Math.round(performance.now() - t0),
+          runningFinal: globe.state.running,
+          overlayFinal: !!document.querySelector('.wr-globe-overlay'),
+        });
+      });
+    }, afterMs);
+  });
+
+/** 动画进行中再次 showTransition：前一个必须被收掉并 resolve。 */
+window.__runOverlap = () =>
+  new Promise((resolve) => {
+    const t0 = performance.now();
+    let p1Done = false;
+    let p1DoneAt = 0;
+    const p1 = globe.showTransition(CITIES.hefei, CITIES.tokyo);
+    p1.then(() => {
+      p1Done = true;
+      p1DoneAt = performance.now() - t0;
+    });
+    setTimeout(() => {
+      const p2 = globe.showTransition(CITIES.paris, CITIES.melbourne);
+      p2.then(() => {
+        resolve({
+          p1Done,
+          p1Ms: Math.round(p1DoneAt),
+          p2Ms: Math.round(performance.now() - t0 - 500),
+          runningFinal: globe.state.running,
+          overlayFinal: !!document.querySelector('.wr-globe-overlay'),
+        });
+      });
+    }, 500);
+  });
+
+/** 先起动画、不等待（供测试在中途插检查）。 */
+window.__begin = (fromId, toId) => {
+  window.__pending = window.__runTransition(fromId, toId);
+  return true;
+};
+window.__beginPair = (from, to) => {
+  window.__pending = window.__runPair(from, to);
+  return true;
+};
+window.__awaitPending = () => window.__pending;
+
+/** reduced-motion / 配置读取。 */
+window.__debug = () => ({
+  supported: globe.supported,
+  reducedMotion: globe.reducedMotion,
+  config: globe.config,
+  /** constants.js 里到底有没有 GLOBE 导出（决定走真实配置还是内置兜底） */
+  hasGlobeConst: !!constants.GLOBE,
+  globeConst: constants.GLOBE || null,
+  state: globe.state,
+  errors: window.__errors.slice(),
+  hasData: !!globe._data,
+  landRings: globe._data ? globe._data.LAND.length : 0,
+  borderRings: globe._data ? globe._data.BORDERS.length : 0,
+});
+
+window.__ready = true;
+</script>
+</body>
+</html>
