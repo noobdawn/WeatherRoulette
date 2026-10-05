@@ -125,11 +125,20 @@ function takeSample() {
     progress: g.state.progress,
     running: g.state.running,
     mode: g.rendererMode,
-    // ── 逼近/拉远：逐帧记录半径倍率 k = R / Rbase（断言用）──
-    k: view.k || 0,
+    // ── 抛物线弹道：逐帧记录相机高度 alt、球占比 ratio、距离 dist（断言用）──
+    // 注意 view.alt 而不是 view.h：h 是视口高度，曾被弹道字段撞名过一次（见 __fxClearProbe）
+    ratio: view.ratio || 0,
+    h: view.alt || 0,
+    hMax: view.hMax || 0,
+    dist: view.dist || 0,
+    arcT: view.t || 0,
+    span: view.span || 0,
     R: view.R,
-    Rbase: view.Rbase || 0,
     side: view.side || Math.min(view.w, view.h),
+    viewportW: view.w,
+    viewportH: view.h,
+    winW: innerWidth,
+    winH: innerHeight,
     distKm: view.distKm || 0,
   });
 }
@@ -169,63 +178,95 @@ function summarize() {
   }
   const spanMs = samples.length > 1 ? samples[samples.length - 1].t - samples[0].t : 0;
 
-  // ── 逼近/拉远：逐帧 k 的聚合（近景 / 中段 / 收尾 / 平滑性）──
-  let firstK = null;
-  let lastK = null;
-  let minK = Infinity;
-  let maxK = -Infinity;
-  let maxDk = 0;
-  let prevK = null;
-  let kAtMid = null;
-  let midDist = Infinity;
-  let Rbase = 0;
+  // ── 抛物线弹道：逐帧 h / ratio / dist 的聚合 ──
+  // fitErr：把实测 h 与标准抛物线 hMax·4t(1-t) 比，只统计 t∈[0.05,0.95]（两端 h→0，相对误差无意义）
+  let firstRatio = null;
+  let lastRatio = null;
+  let minRatio = Infinity;
+  let maxRatio = -Infinity;
+  let firstH = null;
+  let lastH = null;
+  let peakH = -Infinity;
+  let tAtPeak = null;
+  let hMaxSeen = 0;
+  let maxDRatio = 0;
+  let prevRatio = null;
+  let fitErr = 0;
+  let fitSamples = 0;
   let side = 0;
   let distKm = 0;
+  let span = 0;
+  let minViewportH = Infinity;
+  let minViewportW = Infinity;
+  let winH = 0;
+  let winW = 0;
   for (const s of samples) {
-    if (!(s.k > 0)) continue;
-    if (firstK === null) firstK = s.k;
-    lastK = s.k;
-    minK = Math.min(minK, s.k);
-    maxK = Math.max(maxK, s.k);
-    if (prevK !== null) {
-      maxDk = Math.max(maxDk, Math.abs(s.k - prevK));
+    if (!(s.ratio > 0)) continue;
+    if (firstRatio === null) {
+      firstRatio = s.ratio;
+      firstH = s.h;
     }
-    prevK = s.k;
-    const d = Math.abs(s.progress - 0.5);
-    if (d < midDist) {
-      midDist = d;
-      kAtMid = s.k;
+    lastRatio = s.ratio;
+    lastH = s.h;
+    minRatio = Math.min(minRatio, s.ratio);
+    maxRatio = Math.max(maxRatio, s.ratio);
+    if (s.h > peakH) {
+      peakH = s.h;
+      tAtPeak = s.arcT;
     }
-    Rbase = s.Rbase;
+    hMaxSeen = Math.max(hMaxSeen, s.hMax);
+    if (prevRatio !== null) maxDRatio = Math.max(maxDRatio, Math.abs(s.ratio - prevRatio));
+    prevRatio = s.ratio;
+    if (s.hMax > 0 && s.arcT >= 0.05 && s.arcT <= 0.95) {
+      const pred = s.hMax * 4 * s.arcT * (1 - s.arcT);
+      fitErr = Math.max(fitErr, Math.abs(s.h - pred) / pred);
+      fitSamples++;
+    }
     side = s.side;
     distKm = s.distKm;
+    span = s.span;
+    // 视口高度必须始终等于窗口高度 —— 弹道字段一旦撞名 h，这里立刻抓到
+    if (s.viewportH) minViewportH = Math.min(minViewportH, s.viewportH);
+    if (s.viewportW) minViewportW = Math.min(minViewportW, s.viewportW);
+    winH = s.winH;
+    winW = s.winW;
   }
-  const empty = firstK === null;
-  const range = empty ? 0 : maxK - minK;
+  const empty = firstRatio === null;
+  const range = empty ? 0 : maxRatio - minRatio;
   const insideFrames = empty
     ? 0
-    : samples.filter((s) => s.k > 0 && s.k > minK + range * 0.01 && s.k < maxK - range * 0.01).length;
-  const ratioOf = (k) => (Rbase > 0 && side > 0 && k != null ? (2 * k * Rbase) / side : null);
-  const zoom = {
-    samples: samples.filter((s) => s.k > 0).length,
-    firstK,
-    lastK,
-    minK: empty ? null : minK,
-    maxK: empty ? null : maxK,
-    kAtMid,
-    maxDk,
-    Rbase,
+    : samples.filter((s) => s.ratio > 0 && s.ratio < maxRatio - range * 0.01 && s.ratio > minRatio + range * 0.01).length;
+  const arc = {
+    samples: samples.filter((s) => s.ratio > 0).length,
+    firstRatio,
+    lastRatio,
+    minRatio: empty ? null : minRatio,
+    maxRatio: empty ? null : maxRatio,
+    firstH,
+    lastH,
+    peakH: empty ? null : peakH,
+    tAtPeak,
+    hMax: hMaxSeen,
+    span,
     side,
     distKm,
-    ratioFirst: ratioOf(firstK),
-    ratioMid: ratioOf(kAtMid),
-    ratioLast: ratioOf(lastK),
-    ratioMin: empty ? null : ratioOf(minK),
-    ratioMax: empty ? null : ratioOf(maxK),
-    // 拉远幅度：近景半径 → 远景半径缩小了多少（配合 kNear/kFar 一起看）
-    shrink: empty || !(maxK > 0) ? null : 1 - minK / maxK,
-    // 处于两端之间的帧数：为 0 就说明缩放是「瞬间切换」而不是过渡
+    // 抛物线拟合：h 与 hMax·4t(1-t) 的最大相对偏差（只看中段）
+    fitErr,
+    fitSamples,
+    maxDRatio,
+    // 抛高 = 最高点的球比贴地时小多少（负数，越负抛得越明显）
+    throwRatio: empty || !(maxRatio > 0) ? null : minRatio / maxRatio - 1,
+    // 处于两端之间的帧数：为 0 就说明弹道是「瞬间切换」而不是抛物线
     insideFrames,
+    // 最高点比例（由 1/相机距离自然得出）与短边的关系
+    peakOverSide: empty || !(side > 0) ? null : minRatio,
+    arcEndsAtGround: firstH === 0 && lastH === 0,
+    // 视口尺寸自检：任何一帧的 viewport.h 都必须等于窗口高度（撞名 bug 的哨兵）
+    minViewportH: Number.isFinite(minViewportH) ? minViewportH : 0,
+    minViewportW: Number.isFinite(minViewportW) ? minViewportW : 0,
+    winH,
+    winW,
+    viewportOk: Number.isFinite(minViewportH) && minViewportH === winH && minViewportW === winW,
   };
 
   return {
@@ -244,7 +285,7 @@ function summarize() {
     maxPoleGap,
     nullPoles,
     modes: [...modes],
-    zoom,
+    arc,
     firstSample: samples[0] || null,
     lastSample: samples[samples.length - 1] || null,
   };
@@ -994,14 +1035,17 @@ window.__measureDisc = async ({ atMs = 2500, fromId = 'reykjavik', toId = 'singa
 
   const out = {
     atMs,
-    k: view.k,
     R: view.R,
-    Rbase: view.Rbase,
     side: view.side,
     distKm: view.distKm,
-    kNear: zoom.kNear,
-    kFar: zoom.kFar,
-    zoomPhase: zoom.phase,
+    ratio: view.ratio,
+    h: view.alt,
+    hMax: view.hMax,
+    dist: view.dist,
+    arcT: view.t,
+    span: view.span,
+    ratioNear: zoom.ratioNear,
+    phase: zoom.phase,
     expectedPx: 2 * view.R,
     measuredPx: scan ? scan.measuredPx : null,
     ratioMeasured: scan ? scan.measuredPx / view.side : null,
@@ -1012,6 +1056,51 @@ window.__measureDisc = async ({ atMs = 2500, fromId = 'reykjavik', toId = 'singa
   };
   await p;
   return out;
+};
+
+// ── 防回归：前景 fx 图层每帧必须被清空 ────────────────────────
+// 背景：弹道字段曾经取名 `h` 并写进 view 对象，把 view.h（视口高度）覆盖成 0.2px，
+// 于是 _drawFx 里的 clearRect(0,0,w,h) 只清了一条细缝 —— 画面看不出报错，
+// 但大圆弧/标记/标签会在画布上层层累积成"扇面"，截图里一眼可见。
+// 判据：往 fx 角落画一个色块，隔两帧它必须消失。
+window.__fxClearProbe = async () => {
+  const c = document.querySelector('.wr-globe-overlay-fx');
+  if (!c) return { ok: false, error: '没有前景画布（动画没在跑？）' };
+  const ctx = c.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#ff00ff';
+  ctx.fillRect(0, 0, 12, 12);
+  const painted = [...ctx.getImageData(5, 5, 1, 1).data];
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const after = [...ctx.getImageData(5, 5, 1, 1).data];
+  return {
+    ok: true,
+    painted,
+    after,
+    cleared: after[3] < 8 || after[0] !== painted[0] || after[1] !== painted[1],
+    canvas: [c.width, c.height],
+  };
+};
+
+// ── 防回归：2D 降级路径的夜空必须铺满整屏（不是被 view.h 撞名压成一条缝）──
+window.__backdropProbe = (g) => {
+  const cap = g.captureFrame();
+  if (!cap) return null;
+  const at = (x, y) => {
+    const ix = Math.max(0, Math.min(cap.width - 1, Math.round(x * cap.scale)));
+    const iy = Math.max(0, Math.min(cap.height - 1, Math.round(y * cap.scale)));
+    const row = cap.flipY ? cap.height - 1 - iy : iy;
+    const i = (row * cap.width + ix) * 4;
+    return [cap.rgba[i], cap.rgba[i + 1], cap.rgba[i + 2], cap.rgba[i + 3]];
+  };
+  const v = g.viewport;
+  return {
+    topLeft: at(6, 6),
+    bottomRight: at(v.w - 6, v.h - 6),
+    viewport: { w: v.w, h: v.h },
+    size: [cap.width, cap.height],
+  };
 };
 
 // ── 强制 WebGL 不可用（模拟老设备 / 驱动黑名单）────────────────

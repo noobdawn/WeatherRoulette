@@ -22,11 +22,12 @@
 //   WebGL 不可用、贴图加载失败、上下文丢失时自动回退到第一代，**绝不留白、绝不报错到界面**。
 // 两条路径共用下面同一套相机基与 slerp，所以「正北朝上」在哪种渲染下都成立。
 //
-// ─────────────────────────── 逼近 / 拉远 ───────────────────────────
-// 老板要求「拉远程度与两城距离成正比」：几百公里只拉远一点点，几千公里拉到地球直径
-// 占满视口短边的 2/3。正交投影下地球的屏幕轮廓恒为半径 R 的圆盘，所以缩放 = 改 R：
-//   出发先拉远（此时镜头还没开始转）→ 飞行中保持 → 抵达再推近，落在目标城市的近景。
-// R 与相机基完全解耦（up 仍然是每帧从「北」重算出来的），所以正北朝上的判据一个数字都不变。
+// ─────────────────────────── 相机抛物线弹道 ───────────────────────────
+// 老板要求「相机运动的轨迹类似抛物线」：从起点城市"抛"向终点城市，中途升到最高点，两端贴地。
+// 球的大小是**相机距离的函数**（半径 ∝ 1/相机距离），而相机距离由弹道曲线决定：
+//   出发 → 上升 → 最高点（球最小，能看见整颗地球与前后两城）→ 下落 → 贴地（近景）。
+// 抛高与两城距离成正比（hMax ∝ (夹角/π)^0.75），所以几百公里只是轻轻一跳、
+// 几千公里才是明显的大抛；`up` 仍由当前 dir 每帧重算，正北朝上的判据一个数字都不变。
 //
 // 依赖：js/core/constants.js 的 GLOBE / GLOBE_TEXTURES_DIR（都做了完整兜底）、
 //       js/ui/globe-data.js 的 LAND / BORDERS（降级路径用，动态 import，不拖慢首屏）。
@@ -42,10 +43,11 @@ const GLOBE_FALLBACK = {
   fadeMs: 400,
   minLat: -85,
   maxLat: 85,
-  // 逼近/拉远：近景与远景的「球直径 ÷ 视口短边」，k 由渲染器按每个视口实时反解
-  zoomPower: 0.55,
-  zoomNearMinSideRatio: 0.86,
-  zoomFarMinSideRatio: 2 / 3,
+  // 相机抛物线弹道：对跖时的最高点（单位=地球半径）/ 高度幂次 / 贴地基础高度 / 贴地球占比
+  arcHeightFull: 0.3,
+  arcHeightPower: 0.75,
+  cameraBaseAlt: 0.04,
+  nearMinSideRatio: 0.86,
 };
 
 /** 贴图目录兜底（constants.js 里是 GLOBE_TEXTURES_DIR） */
@@ -69,10 +71,11 @@ function readGlobeConfig() {
     fadeMs: Math.round(num('fadeMs', 0, 5000)),
     minLat: Math.min(minLat, maxLat - 1),
     maxLat,
-    // 逼近/拉远：三条参数都从 constants.js 的 GLOBE 读，绝不硬编码
-    zoomPower: num('zoomPower', 0.05, 4),
-    zoomNearMinSideRatio: num('zoomNearMinSideRatio', 0.05, 3),
-    zoomFarMinSideRatio: num('zoomFarMinSideRatio', 0.05, 3),
+    // 抛物线弹道：四条参数都从 constants.js 的 GLOBE 读，绝不硬编码
+    arcHeightFull: num('arcHeightFull', 0, 3),
+    arcHeightPower: num('arcHeightPower', 0.05, 4),
+    cameraBaseAlt: num('cameraBaseAlt', 0, 3),
+    nearMinSideRatio: num('nearMinSideRatio', 0.05, 3),
   };
 }
 
@@ -256,27 +259,38 @@ function easePlateau(p) {
   return s * s * (3 - 2 * s);
 }
 
-/** 0~1 的 smoothstep（与 easePlateau 内部同一套曲线）。 */
-function smoothstep01(s) {
-  return s * s * (3 - 2 * s);
-}
-
-// ───────────────────────────────────────────────────────────── 逼近 / 拉远
-// 老板要求：**拉远程度与两城距离成正比** —— 相隔几百公里只拉远一点点，
-// 相隔几千公里就拉到「地球恰好填满画面的三分之二」。
+// ─────────────────────────── 相机抛物线弹道（逼近 / 拉远）───────────────────────────
+// 老板要求「相机运动的轨迹类似抛物线」：从起点城市"抛"向终点城市，中途升到最高点，
+// 两端贴地；抛得越高球越小（半径 ∝ 1/相机距离），而抛高与两城距离成正比 ——
+// 几百公里只是轻轻一跳，几千公里才是明显的大抛。
 //
-// 做法：正交投影下地球在屏幕上永远是一个半径 R 的圆盘，所以「逼近/拉远」就是让 R 随距离变。
-// 相机数学（up = normalize(north − (north·dir)·dir)，每帧重算）与 R **完全解耦**，
-// 所以这一块一行都不用动 —— 缩放只改 R，屏幕上方照样恒为真北。
+// 这跟"缩放到某个距离再缩回来"不是一回事：那是把缩放当成纯数值的来回，
+// 没有"相机在空间里走了一条弧线"的含义。这里相机位置由弹道曲线决定，
+// 球的大小只是相机距离的函数 —— 两者是同一件事的两种表现。
 //
-// 定标（tools/calibrate-globe-zoom.py 反解，数值写在 constants.js 的 GLOBE）：
-//   近景：球直径 = 视口短边 × zoomNearMinSideRatio（0.86）
-//   远景：球直径 = 视口短边 × zoomFarMinSideRatio（2/3，老板原话）
-//   k 是相对历史基准半径 R_base = min(w·0.44, h·0.34) 的倍率，**按每个视口实时反解**，
-//   于是桌面 / 笔记本 / 手机 / 大屏的拉远幅度统一为 22.5%（k 会大于 1，这是有意的）。
+// 世界坐标（地球半径 = 1）：
+//     A = p(from), B = p(to)                两城单位向量
+//     span  = 夹角(A,B) / π                 0 = 同城，1 = 严格对跖
+//     hMax  = arcHeightFull · span^arcHeightPower
+//     u(t)  = normalize(slerp(A,B,t))       视线方向（指两城之间的球面点，即现有的 dir）
+//     h(t)  = hMax · 4t(1-t)                标准抛物线：峰值 t=0.5，两端 h=0
+//     dist  = 1 + cameraBaseAlt + h(t)      相机到球心距离
+//     ratio = nearMinSideRatio · (1+cameraBaseAlt) / dist     ← 半径 ∝ 1/相机距离
+//     R     = ratio · 0.5 · min(w,h)        屏幕半径（像素）
+//
+// ★ 两个「成正比」分别落在两处：hMax 随距离增长（抛得多高），最高点的球占比
+//   由 1/(1+hMax) 自然得出（对跖时 0.86·1.04/1.34 = 0.6675，恰好是短边的 2/3）。
+//   别把最高点占比硬钉在 2/3，也别把 ratio 绑在"相机距离的百分比"上 —— 那两条错法
+//   见 constants.js 的 GLOBE 注释（前者让 9km 的转场也要抛出 0.6 个地球半径，
+//   后者让短途完全没有缩放）。
+//
+// t 直接取 easePlateau 缓动后的进度（两端各留 10% 静止的时间轴不变），
+// 所以抛物线在镜头方向静止的那两段里就已经在上升 / 下落，观感是"先退后 → 再飞 → 再推近"。
+//
+// ──────────────── 与「正北朝上」完全解耦 ────────────────
+// 变的只是 R 与相机距离（正交投影下距离只影响大小），
+// `up = normalize(north − (north·dir)·dir)` 仍由当前 dir 每帧重算，一个数字都不变。
 const R_EARTH_KM = 6371.0088;
-/** 两城理论最大距离（对跖点）≈ 20015.1 km，用来把距离归一化到 0~1 */
-const MAX_PAIR_KM = Math.PI * R_EARTH_KM;
 
 /**
  * 两座城市之间的大圆距离（km）。
@@ -292,39 +306,35 @@ function haversineKm(a, b) {
   return 2 * R_EARTH_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-/** 历史基准球半径（k 的基准）。 */
-function baseRadius(w, h) {
-  return Math.min(w * 0.44, h * 0.34);
-}
-
 /**
- * 按视口 + 两城距离反解这一次转场的缩放参数（纯函数，方便自测直接核对）。
- *   kNear / kFar 由「直径 = 视口短边 × 比例」反解；k 用距离的幂次做非线性插值
- *   （t' = t^zoomPower，<1 把远距离压缩，避免平时的转场都顶到最远端）。
- * @returns {{Rbase:number, side:number, kNear:number, kFar:number, t:number, k:number, distKm:number}}
+ * 本次转场的弹道参数（纯函数，方便自测直接核对）。
+ *   span = 两城夹角 / π；hMax = arcHeightFull · span^arcHeightPower
+ * 注意用的是城市**真实**经纬度（不做极地夹紧）——夹紧只用于相机方向。
+ * @returns {{span:number, spanDeg:number, hMax:number}}
  */
-function zoomFor(w, h, distKm, cfg) {
-  const Rbase = baseRadius(w, h);
-  const side = Math.min(w, h);
-  const kNear = (cfg.zoomNearMinSideRatio * 0.5 * side) / Rbase;
-  const kFar = (cfg.zoomFarMinSideRatio * 0.5 * side) / Rbase;
-  const span = Number.isFinite(distKm) && distKm > 0 ? distKm : 0;
-  const t = clamp(span / MAX_PAIR_KM, 0, 1) ** cfg.zoomPower;
-  return { Rbase, side, kNear, kFar, t, k: kNear + (kFar - kNear) * t, distKm: span };
-}
-
-/**
- * 拉远/推近的时间轴包络，与 easePlateau 的「两端各留 10% 静止」严格对齐：
- *   前 10%（镜头方向还没开始转）拉远 → 中段保持 → 最后 10%（方向已停住）推近。
- * 这样观感就是「镜头往后退把两座城市收进来 → 转过去 → 再推近看清目标城市」，
- * 而且不额外占用时间轴（总时长仍然是 duration + holdMs）。
- */
-function zoomEnvelope(p) {
-  const H = 0.1;
+function arcFor(a, b, cfg) {
+  const va = sphereVec(a.lat, a.lon, [0, 0, 0]);
+  const vb = sphereVec(b.lat, b.lon, [0, 0, 0]);
+  const sep = Math.acos(clamp(va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2], -1, 1));
+  const span = clamp(sep / Math.PI, 0, 1);
   return {
-    out: smoothstep01(clamp(p / H, 0, 1)),
-    back: smoothstep01(clamp((p - (1 - H)) / H, 0, 1)),
+    span,
+    spanDeg: sep / DEG,
+    hMax: cfg.arcHeightFull * span ** cfg.arcHeightPower,
   };
+}
+
+/**
+ * t 时刻的弹道状态（纯函数）：高度 / 相机距离 / 球占比。
+ * 两端 h=0 → ratio = nearMinSideRatio；t=0.5 时 h=hMax → 本趟最小（最高点）。
+ * @returns {{t:number, h:number, dist:number, ratio:number}}
+ */
+function arcAt(t, hMax, cfg) {
+  const p = clamp(Number.isFinite(t) ? t : 0, 0, 1);
+  const h = hMax * 4 * p * (1 - p);
+  const dist = 1 + cfg.cameraBaseAlt + h;
+  const ratio = (cfg.nearMinSideRatio * (1 + cfg.cameraBaseAlt)) / dist;
+  return { t: p, h, dist, ratio };
 }
 
 // ───────────────────────────────────────────────────────────── 2D 几何缓存
@@ -1321,24 +1331,23 @@ export class Globe {
     this._seq = 0;
     this._last = { from: null, to: null, progress: 0, frames: 0, fps: 0 };
     this._basis = { dir: [0, 0, 1], up: [0, 1, 0], right: [1, 0, 0], forward: [0, 0, -1] };
-    this._view = { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, R: 0, Rbase: 0, k: 0, side: 0, distKm: 0 };
-    // 逼近/拉远的诊断快照（rendererInfo.zoom / viewport 都读它）
+    // 注意：相机高度用 alt 表示，**不要**叫 h —— view.h 是视口高度，撞名会把 clearRect/drawImage 的高度变成 0.2px
+    this._view = { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, R: 0, side: 0, ratio: 0, alt: 0, hMax: 0, dist: 0, t: 0, span: 0, distKm: 0 };
+    // 相机抛物线弹道的诊断快照（rendererInfo.zoom / viewport 都读它）
     this._zoom = {
       active: false,
-      phase: 'idle', // idle | zoom-out | cruise | zoom-in | arrived | near
-      k: 0,
-      kNear: 0,
-      kFar: 0,
-      kTarget: 0, // 本次转场按距离反解出的目标倍率
-      t: 0,
-      R: 0,
-      Rbase: 0,
-      side: 0,
-      distKm: 0,
-      ratioNow: 0, // 当前「球直径 ÷ 视口短边」
-      ratioNear: 0, // 近景比例（应等于 zoomNearMinSideRatio）
-      ratioFar: 0, // 远景比例（应等于 zoomFarMinSideRatio）
-      ratioTarget: 0, // 本次转场目标比例
+      phase: 'idle', // idle | ground | ascend | apex | descend | arrived
+      t: 0, // easePlateau 缓动后的进度（0 = 起点贴地，1 = 终点贴地）
+      hMax: 0, // 本趟弹道最高点（单位 = 地球半径）
+      h: 0, // 当前高度
+      dist: 0, // 当前相机到球心距离（地球半径 = 1）
+      ratio: 0, // 当前「球直径 ÷ 视口短边」
+      ratioNear: 0, // 贴地时的比例（应等于 nearMinSideRatio）
+      span: 0, // 两城夹角 / π（0 = 同城，1 = 对跖）
+      spanDeg: 0, // 两城夹角（度）
+      distKm: 0, // 两城大圆距离（km）
+      side: 0, // 视口短边（CSS 像素）
+      R: 0, // 当前屏幕半径（CSS 像素）
     };
     this._supported = null;
 
@@ -1483,8 +1492,10 @@ export class Globe {
   }
 
   /**
-   * 当前画布视口（CSS 像素）：球心 (cx,cy) 与球面半径 R。
-   * Rbase 是基准半径、k = R / Rbase 是当前的逼近/拉远倍率、distKm 是本次转场的两城距离。
+   * 当前画布视口（CSS 像素）：球心 (cx,cy)、球面半径 R、视口宽高 w/h。
+   * 另附弹道量：side 视口短边、ratio 球直径/短边、alt 相机高度（地球半径=1）、
+   * hMax 本趟最高点、dist 相机到球心距离、t 弹道进度、span 两城夹角/π、distKm 两城距离。
+   * 注意 alt 不叫 h —— h 已经被视口高度占用了。
    */
   get viewport() {
     const v = this._view;
@@ -1495,9 +1506,13 @@ export class Globe {
       cx: v.cx,
       cy: v.cy,
       R: v.R,
-      Rbase: v.Rbase || 0,
-      k: v.k || 0,
       side: v.side || Math.min(v.w, v.h),
+      ratio: v.ratio || 0,
+      alt: v.alt || 0,
+      hMax: v.hMax || 0,
+      dist: v.dist || 0,
+      t: v.t || 0,
+      span: v.span || 0,
       distKm: v.distKm || 0,
     };
   }
@@ -1650,10 +1665,10 @@ export class Globe {
       fade: this._cfg.fadeMs,
       total: this._cfg.duration + this._cfg.holdMs,
       view: null,
-      k: 0, // 当前逼近/拉远倍率（每帧由 _applyZoom 写入）
-      // 逼近/拉远：两城距离决定本次转场的缩放倍率（zoomCfg 在 _layout 里按视口反解）
+      t: 0, // easePlateau 缓动后的弹道进度（每帧由 _applyArc 写入）
+      // 相机抛物线弹道：两城夹角决定本趟的抛高（arc 在 _begin 里算，屏幕半径每帧由 _applyArc 写）
       distKm: fromCity && toCity ? haversineKm(fromCity, toCity) : 0,
-      zoomCfg: null,
+      arc: null,
       countryRef: 1,
       bg: null,
       geo: null,
@@ -1915,6 +1930,8 @@ export class Globe {
     if (!host) throw new Error('找不到挂载节点');
 
     run.geo = this._prepareGeo(data);
+    // 弹道参数：用两城**真实**经纬度算夹角（极地夹紧只作用于相机方向，不作用于这里）
+    run.arc = arcFor(run.from, run.to, this._cfg);
     run.dirFrom = sphereVec(clamp(run.from.lat, this._cfg.minLat, this._cfg.maxLat), run.from.lon, [0, 0, 0]);
     run.dirTo = sphereVec(clamp(run.to.lat, this._cfg.minLat, this._cfg.maxLat), run.to.lon, [0, 0, 0]);
     run.dirNow = [run.dirFrom[0], run.dirFrom[1], run.dirFrom[2]];
@@ -2123,55 +2140,57 @@ export class Globe {
     return typeof window !== 'undefined' ? window : null;
   }
 
-  // ── 内部：逼近 / 拉远 ───────────────────────────────────────
-  /** 把「这个视口 + 这个距离」解出来的缩放参数写进诊断快照。 */
-  _syncZoomInfo(z, view) {
+  // ── 内部：相机抛物线弹道 ───────────────────────────────────
+  /** 把本次转场的弹道参数（与视口无关的部分）写进诊断快照。 */
+  _syncArcInfo(run, view) {
     const info = this._zoom;
-    info.kNear = z.kNear;
-    info.kFar = z.kFar;
-    info.kTarget = z.k; // 本次转场按距离反解出的目标倍率（介于 kNear 与 kFar 之间）
-    info.t = z.t;
-    info.Rbase = z.Rbase;
-    info.side = z.side;
-    info.distKm = z.distKm;
-    info.ratioNear = (2 * z.Rbase * z.kNear) / z.side;
-    info.ratioFar = (2 * z.Rbase * z.kFar) / z.side;
-    info.ratioTarget = (2 * z.Rbase * z.k) / z.side;
-    info.k = view.k;
+    const arc = run.arc;
+    info.ratioNear = this._cfg.nearMinSideRatio;
+    info.side = view.side;
+    info.distKm = run.distKm;
+    if (!arc) return;
+    info.span = arc.span;
+    info.spanDeg = arc.spanDeg;
+    info.hMax = arc.hMax;
+    info.t = view.t || 0;
+    const a = arcAt(view.t || 0, arc.hMax, this._cfg);
+    info.h = a.h;
+    info.dist = a.dist;
+    info.ratio = a.ratio;
     info.R = view.R;
-    info.ratioNow = (2 * view.R) / z.side;
   }
 
   /**
-   * 每帧把缩放写进 run.view.R（所有绘制都从 view.R 取半径，所以一处生效、两条渲染路径都跟上）。
-   * 时间轴：出发先拉远 → 飞行中保持 → 抵达再推近，包络与 easePlateau 的两端静止段对齐。
-   * reduced-motion 下不做缩放动作，直接停在目标城市的近景。
+   * 每帧按弹道曲线把「相机高度 → 球占比 → 屏幕半径」写进 run.view（所有绘制都从 view.R 取半径，
+   * 所以一处生效、两条渲染路径都跟上）。
+   *   t 传 easePlateau 缓动后的进度：两端各留 10% 静止的时间轴不变，
+   *   抛物线在镜头方向静止的那两段里就已经在上升 / 下落。
+   * 两端 h=0 → ratio = nearMinSideRatio（贴地近景）；t=0.5 时最大抛高 → 本趟最小。
+   * reduced-motion 下 t=1（不做旋转），于是自动停在目标城市的贴地近景上。
    */
-  _applyZoom(run, animP) {
+  _applyArc(run, t) {
     const view = run.view;
-    const z = run.zoomCfg;
-    if (!view || !z) return;
-    let k;
-    let phase;
-    if (run.reduced) {
-      k = z.kNear;
-      phase = 'near';
-    } else {
-      const { out, back } = zoomEnvelope(animP);
-      // 注意是朝着**本次转场按距离反解出来的 k**（z.k）拉远，不是无脑拉到 kFar
-      k = z.kNear + (z.k - z.kNear) * out;
-      k = k + (z.kNear - k) * back;
-      phase = animP >= 1 ? 'arrived' : out < 1 ? 'zoom-out' : back > 0 ? 'zoom-in' : 'cruise';
-    }
-    run.k = k;
-    view.k = k;
-    view.R = z.Rbase * k;
+    const arc = run.arc;
+    if (!view || !arc) return;
+    const a = arcAt(t, arc.hMax, this._cfg);
+    const R = a.ratio * 0.5 * view.side;
+
+    run.t = a.t;
+    view.t = a.t;
+    view.alt = a.h; // 相机高度（地球半径 = 1）；字段名避开 h（= 视口高度）
+    view.hMax = arc.hMax;
+    view.dist = a.dist;
+    view.ratio = a.ratio;
+    view.R = R;
+
     const info = this._zoom;
     info.active = true;
-    info.k = k;
-    info.R = view.R;
-    info.ratioNow = (2 * view.R) / z.side;
-    info.phase = phase;
+    info.phase = a.t <= 0 ? 'ground' : a.t >= 1 ? 'arrived' : Math.abs(a.t - 0.5) <= 0.02 ? 'apex' : a.t < 0.5 ? 'ascend' : 'descend';
+    info.t = a.t;
+    info.h = a.h;
+    info.dist = a.dist;
+    info.ratio = a.ratio;
+    info.R = R;
   }
 
   // ── 内部：布局与预渲染 ─────────────────────────────────────
@@ -2187,14 +2206,13 @@ export class Globe {
     const pw = Math.round(w * dpr);
     const ph = Math.round(h * dpr);
 
-    // ── 逼近/拉远：k 必须按**每个视口实时反解**（写死就会出现某些分辨率下不成立）──
-    const z = zoomFor(w, h, run.distKm, this._cfg);
-    run.zoomCfg = z;
-    // 国家蒙版强度按「近景半径」定，转场全程不跟着缩放抖（否则像在呼吸）
-    run.countryRef = clamp((z.Rbase * z.kNear) / 420, 0.45, 1);
-    // 重排（窗口 resize）时保留当前动画进度对应的倍率，不要弹回近景
-    const k0 = run.k > 0 ? run.k : z.kNear;
-    run.k = k0;
+    // ── 弹道：球占比只跟相机距离有关（与视口无关），屏幕半径 = 占比 × 短边的一半 ──
+    const side = Math.min(w, h);
+    // 重排（窗口 resize）时保留当前弹道进度对应的比例，不要弹回贴地
+    const t0 = clamp(Number(run.t) || 0, 0, 1);
+    const a0 = arcAt(t0, run.arc ? run.arc.hMax : 0, this._cfg);
+    // 国家蒙版强度按「贴地半径」定，转场全程不跟着缩放抖（否则像在呼吸）
+    run.countryRef = clamp((a0.ratio * 0.5 * side) / 420, 0.45, 1);
 
     const view = {
       w,
@@ -2202,15 +2220,19 @@ export class Globe {
       dpr,
       cx: w / 2,
       cy: h / 2,
-      R: z.Rbase * k0,
-      Rbase: z.Rbase,
-      k: k0,
-      side: z.side,
-      distKm: z.distKm,
+      R: a0.ratio * 0.5 * side,
+      side,
+      ratio: a0.ratio,
+      alt: a0.h, // 相机高度（不要用 h 这个名字：h 是视口高度）
+      hMax: run.arc ? run.arc.hMax : 0,
+      dist: a0.dist,
+      t: t0,
+      span: run.arc ? run.arc.span : 0,
+      distKm: run.distKm,
     };
     run.view = view;
     this._view = view;
-    this._syncZoomInfo(z, view);
+    this._syncArcInfo(run, view);
 
     const sizeCanvas = (c) => {
       if (!c) return;
@@ -2362,10 +2384,12 @@ export class Globe {
     const animP = clamp(t / (run.dur || 1), 0, 1);
     run.progress = animP;
 
-    // ★ 逼近/拉远：只改球面半径 R，相机基与 slerp 完全不受影响
-    this._applyZoom(run, animP);
-
+    // 弹道进度 t 直接用 easePlateau 缓动后的进度（与 slerp 的 s 是同一个数）
     const s = run.reduced ? 1 : easePlateau(animP);
+    // ★ 抛物线弹道：先由 t 定相机高度 → 球占比 → 屏幕半径 R。
+    //   相机基与 up 完全不受影响（up 仍是下一行按当前 dir 重算出来的）
+    this._applyArc(run, s);
+
     const dir = slerpDir(run.dirFrom, run.dirTo, s, run.dirNow);
     // ★ 每一帧都用「北」重新投影出 up —— 不插值 up 本身，所以画面永远不歪
     computeBasis(dir, this._basis);
