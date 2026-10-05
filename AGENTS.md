@@ -31,7 +31,7 @@
 index.html                极简主页面（满屏壁纸 + 居中大字）
 style.css
 large.html / large.css    大屏版：整屏单城 + 自带播放控制，适合投屏/电视
-sw.js                     Service Worker：分区离线缓存（当前 CACHE_VERSION = v4）
+sw.js                     Service Worker：分区离线缓存（当前 CACHE_VERSION = v5）
 data/
   cities.json             81 座城市（国内 43 + 国外 38）：中英名、国家、经纬度、时区、地标关键词
   wmo-map.json            WMO 天气码 → 中文词/英文词/图标键/音频键
@@ -456,6 +456,8 @@ node tools/e2e-offline.mjs                   # 断网后仍能打开并继续播
 | 换壁纸 | 改 `assets/images/manifest.json` → 跑 `check-images.py --all` 验证 → **必须重跑 `precompute-luminance.py`**（否则新图没有亮度判据） |
 | 换背景音乐 | 替换 `assets/audio/music/music.mp3` 即可（优先级最高）；想回退合成版就删掉它 |
 | 界面样式 | `style.css`（主页面）、`large.css`（大屏版）。**不要**把控制条加回主页面 |
+| 地球贴图 | `python tools/gen-globe-textures.py`（可用 `--albedo-width` 调体积）→ `tools/preview-globe-textures.py` 与 `inspect-globe-borders.py` 肉眼核对 |
+| 地球过场时长/开关 | `js/core/constants.js` 的 `GLOBE`（`enabled` / `duration` / `holdMs` / `fadeMs`） |
 | 加载页 | `js/ui/loading.js`（自包含样式，不依赖 style.css）；保持「细进度条 + 强制进入」的极简形态 |
 | 任何资源改动后 | **把 `sw.js` 的 `CACHE_VERSION` 加一** |
 
@@ -471,3 +473,11 @@ node tools/e2e-offline.mjs                   # 断网后仍能打开并继续播
 - **大字与中英对照优先于信息量**：城市名 1440 端 128px、375 端 54px，温度 168px；
   宁可少显示信息，也不能让 4~6 岁的孩子看不清。
 - **大屏版保留了自己的控制条**（投屏/电视场景需要），主页面保持极简，两者刻意不同。
+- **暂停只走专用按钮**：点画面空白或文字都不暂停。早期版本在 `#app` 上挂了 click 监听，
+  孩子随手一点就停了——这是被明确否掉的设计，不要再加回去。
+- **地球光照用相机系固定光**，不是世界系。世界系固定光在接近对跖的转场（如纽约→东京）里
+  会让目标城市整片背光，孩子看到半颗黑球，违背"地理认知"这个目的。
+  代价是看不到稳定的晨昏线——如果以后要做真实的昼夜教学，需要改成世界系光并给暗面加下限光。
+- **中国固定红色且 `chinaBoost` 单独加权**（有效强度约 0.45，其他国家 0.17）。
+  这是唯一一个国家被特殊对待，因为"让孩子一眼找到自己的国家"是明确的产品需求；
+  编号从 `countries.json` 的 `chinaIndex` 读取，不硬编码。
