@@ -90,12 +90,25 @@ async function runPreload(preloader, loading, segments) {
  */
 function ensureAutoplay(music, onReady, loading = null, { skipGate = null, diag = null } = {}) {
   return new Promise((resolve) => {
-    let settled = false;
+    /**
+     * ⚠ 这里**必须有两个**独立标志，早期版本只用一个 `settled` 承担两件事，出过一个致命 bug：
+     *   `showUnlock()` 一进来就把 `settled = true`，而 `finish()` 开头又是 `if (settled) return`，
+     *   于是用户点「点一下开始」/「强制进入」时 `finish()` 被当成重复调用直接丢弃，
+     *   `onReady()`（= beginBroadcast）永远不执行 —— 表现就是**进度条走到头没反应、点了也没声音**
+     *   （实测 `audioCount=0`、`playingAt=0`、`state.playing=false`）。
+     */
+    let decided = false;   // 是否已决定走哪条路（自动成功 / 需要用户点一下）——用于停掉探测与兜底定时器
+    let started = false;   // onReady 是否已经调用过（真正开播）——用于防止重复开播
+    let detectTimer = null;
+
     const note = (k, v) => { if (diag) diag[k] = v; };
 
+    /** 真正开始播报。可以被「自动成功」和「用户手势解锁」两条路调用，且只生效一次。 */
     const finish = (how) => {
-      if (settled) return;
-      settled = true;
+      if (started) return;
+      started = true;
+      decided = true;
+      if (detectTimer) clearTimeout(detectTimer);
       note('decision', how);
       dropUnlockOverlay();
       loading?.hide();
@@ -105,25 +118,39 @@ function ensureAutoplay(music, onReady, loading = null, { skipGate = null, diag 
       resolve(true);
     };
 
-    const succeed = (how) => {
-      note('how', how);
-      finish(`auto:${how}`);
-    };
-
+    /** 判定「浏览器拦截了自动播放」，请用户点一下。注意这里**不能**把开播也标成已完成。 */
     const showUnlock = (why) => {
-      if (settled) return;
-      settled = true;
+      if (decided || started) return;
+      decided = true;               // ← 只停探测，不代表已开播
+      if (detectTimer) clearTimeout(detectTimer);
       note('decision', 'unlock');
       note('why', why);
       console.warn(`[WeatherRoulette] 浏览器拦截了自动播放（${why}），请用户点一下`);
-      showUnlockOverlay(() => finish('unlock-button'), { autoFireMs: 300 });
+      // 手势之后等一拍再开播：让这一次手势先把音频解出来（Safari 上尤其必要）
+      showUnlockOverlay(() => setTimeout(() => finish('unlock-button'), 300));
       loading?.setHint?.('点一下屏幕开始播报');
       // 兜底：点屏幕上任何地方都能开播，避免用户没注意到按钮
       armAnyGesture(() => finish('unlock-gesture'));
     };
 
-    // 加载页上的「强制进入」：不等下载完，立刻开播
-    if (skipGate) skipGate.fire = () => finish('skip');
+    const succeed = (how) => {
+      if (decided || started) return;
+      note('how', how);
+      finish(`auto:${how}`);
+    };
+
+    // 加载页上的「强制进入」：不等下载完，立刻开播。
+    // 如果用户在 fire 挂上之前就点过按钮（loading.js 的 onSkip 会把 pending 置真），
+    // 这里要立刻补上 —— 否则那次点击等于白点，用户只能一直等。
+    if (skipGate) {
+      skipGate.fire = () => finish('skip');
+      if (skipGate.pending) {
+        skipGate.pending = false;
+        note('why', '用户在解锁判定前就点了「强制进入」');
+        skipGate.fire();
+        return;
+      }
+    }
 
     // 先试着真的播一下（这同时会把音乐解锁）。
     // 注意：music.fadeIn() 被浏览器拦截时**不会 reject**，而是 resolve(false)，
@@ -153,7 +180,7 @@ function ensureAutoplay(music, onReady, loading = null, { skipGate = null, diag 
     );
 
     // 兜底：音乐与探针都没给出结论时，按被拦截处理（宁可多要一次点击，也不能卡住）
-    setTimeout(() => { if (!settled) showUnlock('timeout'); }, 2500);
+    detectTimer = setTimeout(() => { if (!decided && !started) showUnlock('timeout'); }, 2500);
   });
 }
 
@@ -231,7 +258,7 @@ function resumePendingAudio() {
 }
 
 /** 动态生成「点一下开始」兜底遮罩，复用 style.css 里 #start-overlay 的样式 */
-function showUnlockOverlay(onClick, { autoFireMs = 300 } = {}) {
+function showUnlockOverlay(onClick, { autoFireMs = 0 } = {}) {
   if (document.getElementById('start-overlay')) return document.getElementById('start-overlay');
   const doc = document;
   const box = doc.createElement('div');
@@ -371,12 +398,17 @@ async function boot() {
   const preloader = new AudioPreloader();
   // 加载页上的「强制进入」按钮：跳过剩余下载立刻开播。
   // 用间接引用是因为 beginBroadcast / ensureAutoplay 在下面才定义。
-  const skipGate = { fire: null };
+  // fire 在 ensureAutoplay 里才会挂上；pending 用来承接「挂上之前用户就点了」的情况
+  const skipGate = { fire: null, pending: false };
   const loading = new LoadingScreen(document, {
     onSkip: () => {
       preloader.abort();
+      // ⚠ 用户可能在 ensureAutoplay 还没把 skipGate.fire 挂上之前就点了按钮
+      //   （加载页 81ms 就出现了，而 fire 要等数据加载完才赋值）。
+      //   早期这里直接丢弃这次点击 —— 用户点了「强制进入」却毫无反应，只能干等。
+      //   现在改成排队：谁先到都算数。
       if (skipGate.fire) skipGate.fire();
-      else loading.hide();
+      else { skipGate.pending = true; loading.hide(); }
     },
   });
   loading.show();

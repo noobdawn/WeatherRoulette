@@ -92,14 +92,24 @@ const mainPageJs = jsFiles.filter(
 const seenSelectors = [];
 for (const file of mainPageJs) {
   const src = read(file);
-  for (const m of src.matchAll(/querySelector(?:All)?\(\s*['"]([^'"]+)['"]/g)) {
+  for (const m of src.matchAll(/querySelector(?:All)?\(\s*['"`]([^'"`]+)['"`]/g)) {
     const sel = m[1];
-    const idMatch = sel.match(/#([A-Za-z][\w-]*)/);
+    // ⚠ 只认真正的 id 选择器：`#` 必须出现在选择器开头，
+    //   或紧跟在后代/兄弟组合符（空格 > + ~ ,）之后。
+    //   早期写的是 /#([A-Za-z][\w-]*)/（取第一个 #），
+    //   于是组合选择器 '#wr-loading .wr-fill' 会把 **class** `.wr-fill` 也当成 id，
+    //   报出「找不到 #wr-fill」这种假问题（class 当然不在 HTML 的 id 清单里）。
+    const idMatch = sel.match(/(?:^|[\s>+~,])#([A-Za-z][\w-]*)/);
     if (idMatch) {
       seenSelectors.push({ file, sel, id: idMatch[1] });
     }
   }
-  for (const m of src.matchAll(/getElementById\(\s*['"]([^'"]+)['"]/g)) {
+  // 模板字符串里动态拼的（getElementById + JSON.stringify）取不到字面量，这里只收字面量形式。
+  // ⚠ 反引号也要认，否则用反引号写的 getElementById 会被漏掉。
+  //   （别把反引号示例直接写进注释——正则的字符类会匹配到自己，这是自指陷阱。）
+  const BT = String.fromCharCode(96);
+  const getIdRe = new RegExp(`getElementById\\(\\s*['"${BT}]([^'"${BT}]+)['"${BT}]`, 'g');
+  for (const m of src.matchAll(getIdRe)) {
     seenSelectors.push({ file, sel: `#${m[1]}`, id: m[1] });
   }
 }
