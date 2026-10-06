@@ -134,7 +134,7 @@ console.log(
 
 // index.html 必需的 id（极简版契约：满屏壁纸 + 居中大字两块 + 角落两个小按钮 + 隐藏状态位）
 const REQUIRED = [
-  'app', 'bg', 'bg-img-a', 'bg-img-b', 'bg-scene', 'card', 'city-zh', 'city-en',
+  'app', 'bg', 'bg-img-a', 'bg-img-b', 'bg-scene', 'card', 'city-region', 'city-zh', 'city-en',
   'now-block', 'weather-row', 'weather-icon', 'weather-zh', 'weather-en', 'temp-row', 'temp-c',
   'forecast-block', 'forecast-list',
   'btn-pause', 'btn-music', 'sr-only-status',

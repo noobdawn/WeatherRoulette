@@ -83,4 +83,53 @@ export function dayLabelEn(index) {
   return ['Today', 'Tomorrow', 'Day After'][index] ?? `Day ${index + 1}`;
 }
 
+/**
+ * 城市名上方那行小字的地点标签（中英各一条）。
+ *
+ * 老板要求：**国内城市显示省份，国外城市显示国家名**。
+ *   - 国内：用 `province`（如「河北省」「内蒙古自治区」），缩写掉行政后缀，
+ *     不然小字太长会挤（`内蒙古自治区` → `内蒙古`、`新疆维吾尔自治区` → `新疆（维吾尔）`）；
+ *     英文用数据里的 `provinceEn`（由 tools/gen-province-en.py 生成，
+ *     陕西 Shaanxi / 山西 Shanxi 这类易错项已人工指定）
+ *   - 直辖市（北京/天津/上海/重庆）：省份与城市同名，重复显示没有信息量，
+ *     改为显示「中国」——与国外城市显示国家名的口径一致
+ *   - 国外：用 `country` / `countryEn`
+ *
+ * 两个字段都拿不到时返回空字符串，调用方据此隐藏该行（不留空白占位）。
+ * @param {object} city data/cities.json 的城市对象
+ * @returns {{zh:string, en:string}}
+ */
+export function locationLabel(city) {
+  const c = city || {};
+  const country = String(c.country || '').trim();
+
+  if (country === '中国') {
+    const prov = String(c.province || '').trim();
+    const provCore = prov.replace(/市$/, '');
+    const cityCore = String(c.zh || '').replace(/市$/, '');
+    // 直辖市：省级单位名与城市名相同 → 显示国家名，避免「北京 / 北京市」这种重复
+    if (!prov || provCore === cityCore) {
+      return { zh: '中国', en: 'China' };
+    }
+    return {
+      zh: shortenProvince(prov),
+      en: String(c.provinceEn || '').trim(),
+    };
+  }
+
+  return {
+    zh: country,
+    en: String(c.countryEn || '').trim(),
+  };
+}
+
+/** 省份名缩写：去掉行政后缀，让小字放得下 */
+export function shortenProvince(province) {
+  const p = String(province || '').trim();
+  if (!p) return '';
+  if (p.endsWith('特别行政区')) return p.slice(0, -'特别行政区'.length);
+  if (p.endsWith('维吾尔自治区')) return `${p.slice(0, -'维吾尔自治区'.length)}（维吾尔）`;
+  return p.replace(/(省|自治区|市)$/, '');
+}
+
 export { wmoMap };

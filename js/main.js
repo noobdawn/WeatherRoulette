@@ -536,7 +536,10 @@ async function boot() {
     get state() { return broadcaster.state; },
     get contrast() { return screen.lastAnalysis ?? null; },
     get textOn() { return screen.textOn; },
-    /** 地球过场状态：{ running, from, to, progress } */
+    /** 当前城市（供断言/排查：比如「这座城有没有配壁纸」要按 id 查数据层） */
+    get city() { return broadcaster.cards[broadcaster.state.index]?.city ?? null; },
+    get cityId() { return broadcaster.cards[broadcaster.state.index]?.city?.id ?? null; },
+    /** 城市之间的过场（3D 地球）状态：{ running, from, to, progress } */
     get globe() { return globe?.state ?? null; },
     globeRef: globe,
     togglePause,

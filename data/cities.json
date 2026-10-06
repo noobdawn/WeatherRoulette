@@ -12,7 +12,16 @@
       "lat": 39.9042,
       "lon": 116.4074,
       "timezone": "Asia/Shanghai",
-      "keywords": ["天安门", "故宫", "长城", "Tiananmen", "Forbidden City", "Great Wall"]
+      "keywords": [
+        "天安门",
+        "故宫",
+        "长城",
+        "Tiananmen",
+        "Forbidden City",
+        "Great Wall"
+      ],
+      "province": "北京市",
+      "provinceEn": "Beijing"
     },
     {
       "id": "tianjin",
@@ -24,7 +33,13 @@
       "lat": 39.3434,
       "lon": 117.3616,
       "timezone": "Asia/Shanghai",
-      "keywords": ["天津之眼", "意式风情区", "Tianjin Eye"]
+      "keywords": [
+        "天津之眼",
+        "意式风情区",
+        "Tianjin Eye"
+      ],
+      "province": "天津市",
+      "provinceEn": "Tianjin"
     },
     {
       "id": "shijiazhuang",
@@ -36,7 +51,13 @@
       "lat": 38.0428,
       "lon": 114.5149,
       "timezone": "Asia/Shanghai",
-      "keywords": ["正定古城", "赵州桥", "Zhaozhou Bridge"]
+      "keywords": [
+        "正定古城",
+        "赵州桥",
+        "Zhaozhou Bridge"
+      ],
+      "province": "河北省",
+      "provinceEn": "Hebei"
     },
     {
       "id": "taiyuan",
@@ -48,7 +69,13 @@
       "lat": 37.8706,
       "lon": 112.5489,
       "timezone": "Asia/Shanghai",
-      "keywords": ["晋祠", "双塔寺", "Jinci Temple"]
+      "keywords": [
+        "晋祠",
+        "双塔寺",
+        "Jinci Temple"
+      ],
+      "province": "山西省",
+      "provinceEn": "Shanxi"
     },
     {
       "id": "hohhot",
@@ -60,7 +87,14 @@
       "lat": 40.8414,
       "lon": 111.7519,
       "timezone": "Asia/Shanghai",
-      "keywords": ["大召寺", "草原", "Dazhao Temple", "grassland"]
+      "keywords": [
+        "大召寺",
+        "草原",
+        "Dazhao Temple",
+        "grassland"
+      ],
+      "province": "内蒙古自治区",
+      "provinceEn": "Inner Mongolia"
     },
     {
       "id": "shenyang",
@@ -72,7 +106,12 @@
       "lat": 41.8057,
       "lon": 123.4315,
       "timezone": "Asia/Shanghai",
-      "keywords": ["沈阳故宫", "Mukden Palace"]
+      "keywords": [
+        "沈阳故宫",
+        "Mukden Palace"
+      ],
+      "province": "辽宁省",
+      "provinceEn": "Liaoning"
     },
     {
       "id": "dalian",
@@ -84,7 +123,13 @@
       "lat": 38.914,
       "lon": 121.6147,
       "timezone": "Asia/Shanghai",
-      "keywords": ["星海广场", "滨海路", "Xinghai Square"]
+      "keywords": [
+        "星海广场",
+        "滨海路",
+        "Xinghai Square"
+      ],
+      "province": "辽宁省",
+      "provinceEn": "Liaoning"
     },
     {
       "id": "changchun",
@@ -96,7 +141,12 @@
       "lat": 43.8171,
       "lon": 125.3235,
       "timezone": "Asia/Shanghai",
-      "keywords": ["净月潭", "Jingyuetan"]
+      "keywords": [
+        "净月潭",
+        "Jingyuetan"
+      ],
+      "province": "吉林省",
+      "provinceEn": "Jilin"
     },
     {
       "id": "harbin",
@@ -108,7 +158,14 @@
       "lat": 45.8038,
       "lon": 126.5349,
       "timezone": "Asia/Shanghai",
-      "keywords": ["冰雪大世界", "圣索菲亚教堂", "Ice Festival", "Saint Sophia"]
+      "keywords": [
+        "冰雪大世界",
+        "圣索菲亚教堂",
+        "Ice Festival",
+        "Saint Sophia"
+      ],
+      "province": "黑龙江省",
+      "provinceEn": "Heilongjiang"
     },
     {
       "id": "shanghai",
@@ -120,7 +177,14 @@
       "lat": 31.2304,
       "lon": 121.4737,
       "timezone": "Asia/Shanghai",
-      "keywords": ["外滩", "东方明珠", "The Bund", "Oriental Pearl"]
+      "keywords": [
+        "外滩",
+        "东方明珠",
+        "The Bund",
+        "Oriental Pearl"
+      ],
+      "province": "上海市",
+      "provinceEn": "Shanghai"
     },
     {
       "id": "nanjing",
@@ -132,7 +196,13 @@
       "lat": 32.0603,
       "lon": 118.7969,
       "timezone": "Asia/Shanghai",
-      "keywords": ["中山陵", "夫子庙", "Sun Yat-sen Mausoleum"]
+      "keywords": [
+        "中山陵",
+        "夫子庙",
+        "Sun Yat-sen Mausoleum"
+      ],
+      "province": "江苏省",
+      "provinceEn": "Jiangsu"
     },
     {
       "id": "suzhou",
@@ -144,7 +214,15 @@
       "lat": 31.2989,
       "lon": 120.5853,
       "timezone": "Asia/Shanghai",
-      "keywords": ["园林", "虎丘", "拙政园", "classical garden", "Tiger Hill"]
+      "keywords": [
+        "园林",
+        "虎丘",
+        "拙政园",
+        "classical garden",
+        "Tiger Hill"
+      ],
+      "province": "江苏省",
+      "provinceEn": "Jiangsu"
     },
     {
       "id": "hangzhou",
@@ -156,7 +234,13 @@
       "lat": 30.2741,
       "lon": 120.1551,
       "timezone": "Asia/Shanghai",
-      "keywords": ["西湖", "雷峰塔", "West Lake"]
+      "keywords": [
+        "西湖",
+        "雷峰塔",
+        "West Lake"
+      ],
+      "province": "浙江省",
+      "provinceEn": "Zhejiang"
     },
     {
       "id": "ningbo",
@@ -168,7 +252,13 @@
       "lat": 29.8683,
       "lon": 121.544,
       "timezone": "Asia/Shanghai",
-      "keywords": ["天一阁", "老外滩", "Tianyi Pavilion"]
+      "keywords": [
+        "天一阁",
+        "老外滩",
+        "Tianyi Pavilion"
+      ],
+      "province": "浙江省",
+      "provinceEn": "Zhejiang"
     },
     {
       "id": "hefei",
@@ -180,7 +270,13 @@
       "lat": 31.8206,
       "lon": 117.2272,
       "timezone": "Asia/Shanghai",
-      "keywords": ["天鹅湖", "包公园", "Swan Lake"]
+      "keywords": [
+        "天鹅湖",
+        "包公园",
+        "Swan Lake"
+      ],
+      "province": "安徽省",
+      "provinceEn": "Anhui"
     },
     {
       "id": "fuzhou",
@@ -192,7 +288,13 @@
       "lat": 26.0745,
       "lon": 119.2965,
       "timezone": "Asia/Shanghai",
-      "keywords": ["三坊七巷", "鼓山", "Three Lanes and Seven Alleys"]
+      "keywords": [
+        "三坊七巷",
+        "鼓山",
+        "Three Lanes and Seven Alleys"
+      ],
+      "province": "福建省",
+      "provinceEn": "Fujian"
     },
     {
       "id": "xiamen",
@@ -204,7 +306,13 @@
       "lat": 24.4798,
       "lon": 118.0894,
       "timezone": "Asia/Shanghai",
-      "keywords": ["鼓浪屿", "厦门大学", "Gulangyu"]
+      "keywords": [
+        "鼓浪屿",
+        "厦门大学",
+        "Gulangyu"
+      ],
+      "province": "福建省",
+      "provinceEn": "Fujian"
     },
     {
       "id": "nanchang",
@@ -216,7 +324,12 @@
       "lat": 28.682,
       "lon": 115.8579,
       "timezone": "Asia/Shanghai",
-      "keywords": ["滕王阁", "Tengwang Pavilion"]
+      "keywords": [
+        "滕王阁",
+        "Tengwang Pavilion"
+      ],
+      "province": "江西省",
+      "provinceEn": "Jiangxi"
     },
     {
       "id": "jinan",
@@ -228,7 +341,14 @@
       "lat": 36.6512,
       "lon": 117.1201,
       "timezone": "Asia/Shanghai",
-      "keywords": ["趵突泉", "大明湖", "Baotu Spring", "Daming Lake"]
+      "keywords": [
+        "趵突泉",
+        "大明湖",
+        "Baotu Spring",
+        "Daming Lake"
+      ],
+      "province": "山东省",
+      "provinceEn": "Shandong"
     },
     {
       "id": "qingdao",
@@ -240,7 +360,13 @@
       "lat": 36.0671,
       "lon": 120.3826,
       "timezone": "Asia/Shanghai",
-      "keywords": ["栈桥", "八大关", "Zhanqiao Pier"]
+      "keywords": [
+        "栈桥",
+        "八大关",
+        "Zhanqiao Pier"
+      ],
+      "province": "山东省",
+      "provinceEn": "Shandong"
     },
     {
       "id": "zhengzhou",
@@ -252,7 +378,14 @@
       "lat": 34.7466,
       "lon": 113.6254,
       "timezone": "Asia/Shanghai",
-      "keywords": ["二七塔", "少林寺", "Erqi Tower", "Shaolin"]
+      "keywords": [
+        "二七塔",
+        "少林寺",
+        "Erqi Tower",
+        "Shaolin"
+      ],
+      "province": "河南省",
+      "provinceEn": "Henan"
     },
     {
       "id": "wuhan",
@@ -264,7 +397,13 @@
       "lat": 30.5928,
       "lon": 114.3055,
       "timezone": "Asia/Shanghai",
-      "keywords": ["黄鹤楼", "长江大桥", "Yellow Crane Tower"]
+      "keywords": [
+        "黄鹤楼",
+        "长江大桥",
+        "Yellow Crane Tower"
+      ],
+      "province": "湖北省",
+      "provinceEn": "Hubei"
     },
     {
       "id": "changsha",
@@ -276,7 +415,13 @@
       "lat": 28.2282,
       "lon": 112.9388,
       "timezone": "Asia/Shanghai",
-      "keywords": ["橘子洲", "岳麓山", "Orange Isle"]
+      "keywords": [
+        "橘子洲",
+        "岳麓山",
+        "Orange Isle"
+      ],
+      "province": "湖南省",
+      "provinceEn": "Hunan"
     },
     {
       "id": "guangzhou",
@@ -288,7 +433,14 @@
       "lat": 23.1291,
       "lon": 113.2644,
       "timezone": "Asia/Shanghai",
-      "keywords": ["广州塔", "珠江", "Canton Tower", "Pearl River"]
+      "keywords": [
+        "广州塔",
+        "珠江",
+        "Canton Tower",
+        "Pearl River"
+      ],
+      "province": "广东省",
+      "provinceEn": "Guangdong"
     },
     {
       "id": "shenzhen",
@@ -300,7 +452,13 @@
       "lat": 22.5431,
       "lon": 114.0579,
       "timezone": "Asia/Shanghai",
-      "keywords": ["平安大厦", "深圳湾", "Ping An Finance Center"]
+      "keywords": [
+        "平安大厦",
+        "深圳湾",
+        "Ping An Finance Center"
+      ],
+      "province": "广东省",
+      "provinceEn": "Guangdong"
     },
     {
       "id": "zhuhai",
@@ -312,7 +470,13 @@
       "lat": 22.271,
       "lon": 113.5767,
       "timezone": "Asia/Shanghai",
-      "keywords": ["情侣路", "港珠澳大桥", "HZMB"]
+      "keywords": [
+        "情侣路",
+        "港珠澳大桥",
+        "HZMB"
+      ],
+      "province": "广东省",
+      "provinceEn": "Guangdong"
     },
     {
       "id": "foshan",
@@ -324,7 +488,13 @@
       "lat": 23.0218,
       "lon": 113.1219,
       "timezone": "Asia/Shanghai",
-      "keywords": ["祖庙", "岭南天地", "Ancestral Temple"]
+      "keywords": [
+        "祖庙",
+        "岭南天地",
+        "Ancestral Temple"
+      ],
+      "province": "广东省",
+      "provinceEn": "Guangdong"
     },
     {
       "id": "dongguan",
@@ -336,7 +506,13 @@
       "lat": 23.0207,
       "lon": 113.7518,
       "timezone": "Asia/Shanghai",
-      "keywords": ["松山湖", "可园", "Songshan Lake"]
+      "keywords": [
+        "松山湖",
+        "可园",
+        "Songshan Lake"
+      ],
+      "province": "广东省",
+      "provinceEn": "Guangdong"
     },
     {
       "id": "nanning",
@@ -348,7 +524,13 @@
       "lat": 22.817,
       "lon": 108.3665,
       "timezone": "Asia/Shanghai",
-      "keywords": ["青秀山", "绿城", "Qingxiu Mountain"]
+      "keywords": [
+        "青秀山",
+        "绿城",
+        "Qingxiu Mountain"
+      ],
+      "province": "广西壮族自治区",
+      "provinceEn": "Guangxi"
     },
     {
       "id": "haikou",
@@ -360,7 +542,13 @@
       "lat": 20.0444,
       "lon": 110.1999,
       "timezone": "Asia/Shanghai",
-      "keywords": ["骑楼老街", "假日海滩", "Qilou Old Street"]
+      "keywords": [
+        "骑楼老街",
+        "假日海滩",
+        "Qilou Old Street"
+      ],
+      "province": "海南省",
+      "provinceEn": "Hainan"
     },
     {
       "id": "chongqing",
@@ -372,7 +560,13 @@
       "lat": 29.563,
       "lon": 106.5516,
       "timezone": "Asia/Shanghai",
-      "keywords": ["洪崖洞", "轻轨穿楼", "Hongya Cave"]
+      "keywords": [
+        "洪崖洞",
+        "轻轨穿楼",
+        "Hongya Cave"
+      ],
+      "province": "重庆市",
+      "provinceEn": "Chongqing"
     },
     {
       "id": "chengdu",
@@ -384,7 +578,14 @@
       "lat": 30.5728,
       "lon": 104.0668,
       "timezone": "Asia/Shanghai",
-      "keywords": ["熊猫基地", "锦里", "Panda Base", "Jinli"]
+      "keywords": [
+        "熊猫基地",
+        "锦里",
+        "Panda Base",
+        "Jinli"
+      ],
+      "province": "四川省",
+      "provinceEn": "Sichuan"
     },
     {
       "id": "guiyang",
@@ -396,7 +597,13 @@
       "lat": 26.647,
       "lon": 106.6302,
       "timezone": "Asia/Shanghai",
-      "keywords": ["甲秀楼", "黔灵山", "Jiaxiu Tower"]
+      "keywords": [
+        "甲秀楼",
+        "黔灵山",
+        "Jiaxiu Tower"
+      ],
+      "province": "贵州省",
+      "provinceEn": "Guizhou"
     },
     {
       "id": "kunming",
@@ -408,7 +615,14 @@
       "lat": 24.8801,
       "lon": 102.8329,
       "timezone": "Asia/Shanghai",
-      "keywords": ["滇池", "石林", "Dianchi Lake", "Stone Forest"]
+      "keywords": [
+        "滇池",
+        "石林",
+        "Dianchi Lake",
+        "Stone Forest"
+      ],
+      "province": "云南省",
+      "provinceEn": "Yunnan"
     },
     {
       "id": "xian",
@@ -420,7 +634,14 @@
       "lat": 34.3416,
       "lon": 108.9398,
       "timezone": "Asia/Shanghai",
-      "keywords": ["兵马俑", "大雁塔", "Terracotta Army", "Giant Wild Goose Pagoda"]
+      "keywords": [
+        "兵马俑",
+        "大雁塔",
+        "Terracotta Army",
+        "Giant Wild Goose Pagoda"
+      ],
+      "province": "陕西省",
+      "provinceEn": "Shaanxi"
     },
     {
       "id": "lanzhou",
@@ -432,7 +653,14 @@
       "lat": 36.0611,
       "lon": 103.8343,
       "timezone": "Asia/Shanghai",
-      "keywords": ["中山桥", "黄河", "Zhongshan Bridge", "Yellow River"]
+      "keywords": [
+        "中山桥",
+        "黄河",
+        "Zhongshan Bridge",
+        "Yellow River"
+      ],
+      "province": "甘肃省",
+      "provinceEn": "Gansu"
     },
     {
       "id": "xining",
@@ -444,7 +672,14 @@
       "lat": 36.6171,
       "lon": 101.7782,
       "timezone": "Asia/Shanghai",
-      "keywords": ["塔尔寺", "青海湖", "Kumbum Monastery", "Qinghai Lake"]
+      "keywords": [
+        "塔尔寺",
+        "青海湖",
+        "Kumbum Monastery",
+        "Qinghai Lake"
+      ],
+      "province": "青海省",
+      "provinceEn": "Qinghai"
     },
     {
       "id": "yinchuan",
@@ -456,7 +691,13 @@
       "lat": 38.4872,
       "lon": 106.2309,
       "timezone": "Asia/Shanghai",
-      "keywords": ["西夏王陵", "沙湖", "Western Xia Tombs"]
+      "keywords": [
+        "西夏王陵",
+        "沙湖",
+        "Western Xia Tombs"
+      ],
+      "province": "宁夏回族自治区",
+      "provinceEn": "Ningxia"
     },
     {
       "id": "urumqi",
@@ -468,7 +709,14 @@
       "lat": 43.8256,
       "lon": 87.6168,
       "timezone": "Asia/Shanghai",
-      "keywords": ["天山", "大巴扎", "Tianshan", "Grand Bazaar"]
+      "keywords": [
+        "天山",
+        "大巴扎",
+        "Tianshan",
+        "Grand Bazaar"
+      ],
+      "province": "新疆维吾尔自治区",
+      "provinceEn": "Xinjiang"
     },
     {
       "id": "lhasa",
@@ -480,7 +728,13 @@
       "lat": 29.652,
       "lon": 91.1721,
       "timezone": "Asia/Shanghai",
-      "keywords": ["布达拉宫", "大昭寺", "Potala Palace"]
+      "keywords": [
+        "布达拉宫",
+        "大昭寺",
+        "Potala Palace"
+      ],
+      "province": "西藏自治区",
+      "provinceEn": "Tibet"
     },
     {
       "id": "hongkong",
@@ -492,7 +746,14 @@
       "lat": 22.3193,
       "lon": 114.1694,
       "timezone": "Asia/Hong_Kong",
-      "keywords": ["维多利亚港", "太平山", "Victoria Harbour", "Victoria Peak"]
+      "keywords": [
+        "维多利亚港",
+        "太平山",
+        "Victoria Harbour",
+        "Victoria Peak"
+      ],
+      "province": "香港特别行政区",
+      "provinceEn": "Hong Kong"
     },
     {
       "id": "macau",
@@ -504,7 +765,12 @@
       "lat": 22.1987,
       "lon": 113.5439,
       "timezone": "Asia/Macau",
-      "keywords": ["大三巴牌坊", "Ruins of St. Paul's"]
+      "keywords": [
+        "大三巴牌坊",
+        "Ruins of St. Paul's"
+      ],
+      "province": "澳门特别行政区",
+      "provinceEn": "Macao"
     },
     {
       "id": "taipei",
@@ -516,7 +782,12 @@
       "lat": 25.033,
       "lon": 121.5654,
       "timezone": "Asia/Taipei",
-      "keywords": ["台北101", "Taipei 101"]
+      "keywords": [
+        "台北101",
+        "Taipei 101"
+      ],
+      "province": "台湾省",
+      "provinceEn": "Taiwan"
     },
     {
       "id": "tokyo",
@@ -528,7 +799,12 @@
       "lat": 35.6762,
       "lon": 139.6503,
       "timezone": "Asia/Tokyo",
-      "keywords": ["东京塔", "富士山", "Tokyo Tower", "Mount Fuji"]
+      "keywords": [
+        "东京塔",
+        "富士山",
+        "Tokyo Tower",
+        "Mount Fuji"
+      ]
     },
     {
       "id": "osaka",
@@ -540,7 +816,11 @@
       "lat": 34.6937,
       "lon": 135.5023,
       "timezone": "Asia/Tokyo",
-      "keywords": ["大阪城", "心斋桥", "Osaka Castle"]
+      "keywords": [
+        "大阪城",
+        "心斋桥",
+        "Osaka Castle"
+      ]
     },
     {
       "id": "kyoto",
@@ -552,7 +832,12 @@
       "lat": 35.0116,
       "lon": 135.7681,
       "timezone": "Asia/Tokyo",
-      "keywords": ["清水寺", "金阁寺", "Kiyomizu-dera", "Kinkaku-ji"]
+      "keywords": [
+        "清水寺",
+        "金阁寺",
+        "Kiyomizu-dera",
+        "Kinkaku-ji"
+      ]
     },
     {
       "id": "sapporo",
@@ -564,7 +849,11 @@
       "lat": 43.0618,
       "lon": 141.3545,
       "timezone": "Asia/Tokyo",
-      "keywords": ["雪祭", "大通公园", "Snow Festival"]
+      "keywords": [
+        "雪祭",
+        "大通公园",
+        "Snow Festival"
+      ]
     },
     {
       "id": "seoul",
@@ -576,7 +865,12 @@
       "lat": 37.5665,
       "lon": 126.978,
       "timezone": "Asia/Seoul",
-      "keywords": ["景福宫", "南山塔", "Gyeongbokgung", "N Seoul Tower"]
+      "keywords": [
+        "景福宫",
+        "南山塔",
+        "Gyeongbokgung",
+        "N Seoul Tower"
+      ]
     },
     {
       "id": "busan",
@@ -588,7 +882,11 @@
       "lat": 35.1796,
       "lon": 129.0756,
       "timezone": "Asia/Seoul",
-      "keywords": ["海云台", "甘川文化村", "Haeundae"]
+      "keywords": [
+        "海云台",
+        "甘川文化村",
+        "Haeundae"
+      ]
     },
     {
       "id": "singapore",
@@ -600,7 +898,12 @@
       "lat": 1.3521,
       "lon": 103.8198,
       "timezone": "Asia/Singapore",
-      "keywords": ["滨海湾", "鱼尾狮", "Marina Bay Sands", "Merlion"]
+      "keywords": [
+        "滨海湾",
+        "鱼尾狮",
+        "Marina Bay Sands",
+        "Merlion"
+      ]
     },
     {
       "id": "sydney",
@@ -612,7 +915,12 @@
       "lat": -33.8688,
       "lon": 151.2093,
       "timezone": "Australia/Sydney",
-      "keywords": ["歌剧院", "海港大桥", "Opera House", "Harbour Bridge"]
+      "keywords": [
+        "歌剧院",
+        "海港大桥",
+        "Opera House",
+        "Harbour Bridge"
+      ]
     },
     {
       "id": "melbourne",
@@ -624,7 +932,11 @@
       "lat": -37.8136,
       "lon": 144.9631,
       "timezone": "Australia/Melbourne",
-      "keywords": ["联邦广场", "大洋路", "Federation Square"]
+      "keywords": [
+        "联邦广场",
+        "大洋路",
+        "Federation Square"
+      ]
     },
     {
       "id": "auckland",
@@ -636,7 +948,11 @@
       "lat": -36.8485,
       "lon": 174.7633,
       "timezone": "Pacific/Auckland",
-      "keywords": ["天空塔", "海港", "Sky Tower"]
+      "keywords": [
+        "天空塔",
+        "海港",
+        "Sky Tower"
+      ]
     },
     {
       "id": "london",
@@ -648,7 +964,12 @@
       "lat": 51.5074,
       "lon": -0.1278,
       "timezone": "Europe/London",
-      "keywords": ["大本钟", "伦敦塔桥", "Big Ben", "Tower Bridge"]
+      "keywords": [
+        "大本钟",
+        "伦敦塔桥",
+        "Big Ben",
+        "Tower Bridge"
+      ]
     },
     {
       "id": "edinburgh",
@@ -660,7 +981,10 @@
       "lat": 55.9533,
       "lon": -3.1883,
       "timezone": "Europe/London",
-      "keywords": ["爱丁堡城堡", "Edinburgh Castle"]
+      "keywords": [
+        "爱丁堡城堡",
+        "Edinburgh Castle"
+      ]
     },
     {
       "id": "paris",
@@ -672,7 +996,12 @@
       "lat": 48.8566,
       "lon": 2.3522,
       "timezone": "Europe/Paris",
-      "keywords": ["埃菲尔铁塔", "卢浮宫", "Eiffel Tower", "Louvre"]
+      "keywords": [
+        "埃菲尔铁塔",
+        "卢浮宫",
+        "Eiffel Tower",
+        "Louvre"
+      ]
     },
     {
       "id": "marseille",
@@ -684,7 +1013,11 @@
       "lat": 43.2965,
       "lon": 5.3698,
       "timezone": "Europe/Paris",
-      "keywords": ["老港", "圣母加德大教堂", "Vieux-Port"]
+      "keywords": [
+        "老港",
+        "圣母加德大教堂",
+        "Vieux-Port"
+      ]
     },
     {
       "id": "berlin",
@@ -696,7 +1029,11 @@
       "lat": 52.52,
       "lon": 13.405,
       "timezone": "Europe/Berlin",
-      "keywords": ["勃兰登堡门", "国会大厦", "Brandenburg Gate"]
+      "keywords": [
+        "勃兰登堡门",
+        "国会大厦",
+        "Brandenburg Gate"
+      ]
     },
     {
       "id": "munich",
@@ -708,7 +1045,11 @@
       "lat": 48.1351,
       "lon": 11.582,
       "timezone": "Europe/Berlin",
-      "keywords": ["玛利亚广场", "新天鹅堡", "Marienplatz"]
+      "keywords": [
+        "玛利亚广场",
+        "新天鹅堡",
+        "Marienplatz"
+      ]
     },
     {
       "id": "frankfurt",
@@ -720,7 +1061,11 @@
       "lat": 50.1109,
       "lon": 8.6821,
       "timezone": "Europe/Berlin",
-      "keywords": ["罗马广场", "美因河", "Römerberg"]
+      "keywords": [
+        "罗马广场",
+        "美因河",
+        "Römerberg"
+      ]
     },
     {
       "id": "rome",
@@ -732,7 +1077,12 @@
       "lat": 41.9028,
       "lon": 12.4964,
       "timezone": "Europe/Rome",
-      "keywords": ["斗兽场", "许愿池", "Colosseum", "Trevi Fountain"]
+      "keywords": [
+        "斗兽场",
+        "许愿池",
+        "Colosseum",
+        "Trevi Fountain"
+      ]
     },
     {
       "id": "milan",
@@ -744,7 +1094,10 @@
       "lat": 45.4642,
       "lon": 9.19,
       "timezone": "Europe/Rome",
-      "keywords": ["米兰大教堂", "Duomo"]
+      "keywords": [
+        "米兰大教堂",
+        "Duomo"
+      ]
     },
     {
       "id": "venice",
@@ -756,7 +1109,12 @@
       "lat": 45.4408,
       "lon": 12.3155,
       "timezone": "Europe/Rome",
-      "keywords": ["圣马可广场", "贡多拉", "St Mark's Square", "gondola"]
+      "keywords": [
+        "圣马可广场",
+        "贡多拉",
+        "St Mark's Square",
+        "gondola"
+      ]
     },
     {
       "id": "madrid",
@@ -768,7 +1126,11 @@
       "lat": 40.4168,
       "lon": -3.7038,
       "timezone": "Europe/Madrid",
-      "keywords": ["王宫", "太阳门", "Royal Palace"]
+      "keywords": [
+        "王宫",
+        "太阳门",
+        "Royal Palace"
+      ]
     },
     {
       "id": "barcelona",
@@ -780,7 +1142,12 @@
       "lat": 41.3874,
       "lon": 2.1686,
       "timezone": "Europe/Madrid",
-      "keywords": ["圣家堂", "高迪", "Sagrada Família", "Gaudí"]
+      "keywords": [
+        "圣家堂",
+        "高迪",
+        "Sagrada Família",
+        "Gaudí"
+      ]
     },
     {
       "id": "amsterdam",
@@ -792,7 +1159,12 @@
       "lat": 52.3676,
       "lon": 4.9041,
       "timezone": "Europe/Amsterdam",
-      "keywords": ["运河", "风车", "canal", "windmill"]
+      "keywords": [
+        "运河",
+        "风车",
+        "canal",
+        "windmill"
+      ]
     },
     {
       "id": "zurich",
@@ -804,7 +1176,12 @@
       "lat": 47.3769,
       "lon": 8.5417,
       "timezone": "Europe/Zurich",
-      "keywords": ["苏黎世湖", "雪山", "Lake Zurich", "Alps"]
+      "keywords": [
+        "苏黎世湖",
+        "雪山",
+        "Lake Zurich",
+        "Alps"
+      ]
     },
     {
       "id": "vienna",
@@ -816,7 +1193,12 @@
       "lat": 48.2082,
       "lon": 16.3738,
       "timezone": "Europe/Vienna",
-      "keywords": ["美泉宫", "金色大厅", "Schönbrunn", "Musikverein"]
+      "keywords": [
+        "美泉宫",
+        "金色大厅",
+        "Schönbrunn",
+        "Musikverein"
+      ]
     },
     {
       "id": "stockholm",
@@ -828,7 +1210,12 @@
       "lat": 59.3293,
       "lon": 18.0686,
       "timezone": "Europe/Stockholm",
-      "keywords": ["老城", "群岛", "Gamla Stan", "archipelago"]
+      "keywords": [
+        "老城",
+        "群岛",
+        "Gamla Stan",
+        "archipelago"
+      ]
     },
     {
       "id": "oslo",
@@ -840,7 +1227,12 @@
       "lat": 59.9139,
       "lon": 10.7522,
       "timezone": "Europe/Oslo",
-      "keywords": ["歌剧院", "峡湾", "Opera House", "fjord"]
+      "keywords": [
+        "歌剧院",
+        "峡湾",
+        "Opera House",
+        "fjord"
+      ]
     },
     {
       "id": "copenhagen",
@@ -852,7 +1244,12 @@
       "lat": 55.6761,
       "lon": 12.5683,
       "timezone": "Europe/Copenhagen",
-      "keywords": ["小美人鱼", "新港", "Little Mermaid", "Nyhavn"]
+      "keywords": [
+        "小美人鱼",
+        "新港",
+        "Little Mermaid",
+        "Nyhavn"
+      ]
     },
     {
       "id": "helsinki",
@@ -864,7 +1261,12 @@
       "lat": 60.1699,
       "lon": 24.9384,
       "timezone": "Europe/Helsinki",
-      "keywords": ["大教堂", "极光", "Cathedral", "aurora"]
+      "keywords": [
+        "大教堂",
+        "极光",
+        "Cathedral",
+        "aurora"
+      ]
     },
     {
       "id": "reykjavik",
@@ -876,7 +1278,12 @@
       "lat": 64.1466,
       "lon": -21.9426,
       "timezone": "Atlantic/Reykjavik",
-      "keywords": ["极光", "哈尔格林姆教堂", "aurora", "Hallgrímskirkja"]
+      "keywords": [
+        "极光",
+        "哈尔格林姆教堂",
+        "aurora",
+        "Hallgrímskirkja"
+      ]
     },
     {
       "id": "newyork",
@@ -888,7 +1295,12 @@
       "lat": 40.7128,
       "lon": -74.006,
       "timezone": "America/New_York",
-      "keywords": ["自由女神像", "时代广场", "Statue of Liberty", "Times Square"]
+      "keywords": [
+        "自由女神像",
+        "时代广场",
+        "Statue of Liberty",
+        "Times Square"
+      ]
     },
     {
       "id": "losangeles",
@@ -900,7 +1312,11 @@
       "lat": 34.0522,
       "lon": -118.2437,
       "timezone": "America/Los_Angeles",
-      "keywords": ["好莱坞", "金门大桥", "Hollywood"]
+      "keywords": [
+        "好莱坞",
+        "金门大桥",
+        "Hollywood"
+      ]
     },
     {
       "id": "sanfrancisco",
@@ -912,7 +1328,12 @@
       "lat": 37.7749,
       "lon": -122.4194,
       "timezone": "America/Los_Angeles",
-      "keywords": ["金门大桥", "渔人码头", "Golden Gate Bridge", "Fisherman's Wharf"]
+      "keywords": [
+        "金门大桥",
+        "渔人码头",
+        "Golden Gate Bridge",
+        "Fisherman's Wharf"
+      ]
     },
     {
       "id": "chicago",
@@ -924,7 +1345,12 @@
       "lat": 41.8781,
       "lon": -87.6298,
       "timezone": "America/Chicago",
-      "keywords": ["云门", "密歇根湖", "Cloud Gate", "Lake Michigan"]
+      "keywords": [
+        "云门",
+        "密歇根湖",
+        "Cloud Gate",
+        "Lake Michigan"
+      ]
     },
     {
       "id": "seattle",
@@ -936,7 +1362,12 @@
       "lat": 47.6062,
       "lon": -122.3321,
       "timezone": "America/Los_Angeles",
-      "keywords": ["太空针塔", "雷尼尔山", "Space Needle", "Mount Rainier"]
+      "keywords": [
+        "太空针塔",
+        "雷尼尔山",
+        "Space Needle",
+        "Mount Rainier"
+      ]
     },
     {
       "id": "honolulu",
@@ -948,7 +1379,10 @@
       "lat": 21.3069,
       "lon": -157.8583,
       "timezone": "Pacific/Honolulu",
-      "keywords": ["威基基海滩", "Waikiki"]
+      "keywords": [
+        "威基基海滩",
+        "Waikiki"
+      ]
     },
     {
       "id": "toronto",
@@ -960,7 +1394,10 @@
       "lat": 43.6532,
       "lon": -79.3832,
       "timezone": "America/Toronto",
-      "keywords": ["CN塔", "CN Tower"]
+      "keywords": [
+        "CN塔",
+        "CN Tower"
+      ]
     },
     {
       "id": "vancouver",
@@ -972,7 +1409,1711 @@
       "lat": 49.2827,
       "lon": -123.1207,
       "timezone": "America/Vancouver",
-      "keywords": ["斯坦利公园", "雪山", "Stanley Park"]
+      "keywords": [
+        "斯坦利公园",
+        "雪山",
+        "Stanley Park"
+      ]
+    },
+    {
+      "id": "lin-cang",
+      "zh": "临沧",
+      "en": "LinCang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "云南省",
+      "lat": 23.8905,
+      "lon": 100.0954,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "临沧",
+        "云南省"
+      ],
+      "provinceEn": "Yunnan"
+    },
+    {
+      "id": "li-jiang",
+      "zh": "丽江",
+      "en": "LiJiang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "云南省",
+      "lat": 26.8607,
+      "lon": 100.2325,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "丽江",
+        "云南省"
+      ],
+      "provinceEn": "Yunnan"
+    },
+    {
+      "id": "bao-shan",
+      "zh": "保山",
+      "en": "BaoShan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "云南省",
+      "lat": 25.139,
+      "lon": 99.1773,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "保山",
+        "云南省"
+      ],
+      "provinceEn": "Yunnan"
+    },
+    {
+      "id": "wu-hai",
+      "zh": "乌海",
+      "en": "WuHai City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "内蒙古自治区",
+      "lat": 39.662,
+      "lon": 106.8004,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "乌海",
+        "内蒙古自治区"
+      ],
+      "provinceEn": "Inner Mongolia"
+    },
+    {
+      "id": "xing-an-meng",
+      "zh": "兴安盟",
+      "en": "XingAn League",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "内蒙古自治区",
+      "lat": 46.0885,
+      "lon": 122.0444,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "兴安盟",
+        "内蒙古自治区"
+      ],
+      "provinceEn": "Inner Mongolia"
+    },
+    {
+      "id": "bao-tou",
+      "zh": "包头",
+      "en": "BaoTou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "内蒙古自治区",
+      "lat": 40.6629,
+      "lon": 109.8465,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "包头",
+        "内蒙古自治区"
+      ],
+      "provinceEn": "Inner Mongolia"
+    },
+    {
+      "id": "ji-lin",
+      "zh": "吉林",
+      "en": "JiLin City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "东北",
+      "province": "吉林省",
+      "lat": 43.8436,
+      "lon": 126.5556,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "吉林",
+        "吉林省"
+      ],
+      "provinceEn": "Jilin"
+    },
+    {
+      "id": "si-ping",
+      "zh": "四平",
+      "en": "SiPing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "东北",
+      "province": "吉林省",
+      "lat": 43.172,
+      "lon": 124.3565,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "四平",
+        "吉林省"
+      ],
+      "provinceEn": "Jilin"
+    },
+    {
+      "id": "le-shan",
+      "zh": "乐山",
+      "en": "LeShan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 29.5579,
+      "lon": 103.7725,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "乐山",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "nei-jiang",
+      "zh": "内江",
+      "en": "NeiJiang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 29.5859,
+      "lon": 105.0646,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "内江",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "nan-chong",
+      "zh": "南充",
+      "en": "NanChong City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 30.8438,
+      "lon": 106.1175,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "南充",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "yi-bin",
+      "zh": "宜宾",
+      "en": "YiBin City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 28.758,
+      "lon": 104.6494,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宜宾",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "ba-zhong",
+      "zh": "巴中",
+      "en": "BaZhong City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 31.8729,
+      "lon": 106.7516,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "巴中",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "guang-yuan",
+      "zh": "广元",
+      "en": "GuangYuan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 32.4416,
+      "lon": 105.8504,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "广元",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "guang-an",
+      "zh": "广安",
+      "en": "GuangAn City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 30.4617,
+      "lon": 106.6396,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "广安",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "de-yang",
+      "zh": "德阳",
+      "en": "DeYang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "四川省",
+      "lat": 31.1331,
+      "lon": 104.4044,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "德阳",
+        "四川省"
+      ],
+      "provinceEn": "Sichuan"
+    },
+    {
+      "id": "zhong-wei",
+      "zh": "中卫",
+      "en": "ZhongWei City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "宁夏回族自治区",
+      "lat": 37.5057,
+      "lon": 105.2036,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "中卫",
+        "宁夏回族自治区"
+      ],
+      "provinceEn": "Ningxia"
+    },
+    {
+      "id": "wu-zhong",
+      "zh": "吴忠",
+      "en": "WuZhong City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "宁夏回族自治区",
+      "lat": 38.0037,
+      "lon": 106.2054,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "吴忠",
+        "宁夏回族自治区"
+      ],
+      "provinceEn": "Ningxia"
+    },
+    {
+      "id": "gu-yuan",
+      "zh": "固原",
+      "en": "GuYuan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "宁夏回族自治区",
+      "lat": 36.0216,
+      "lon": 106.2486,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "固原",
+        "宁夏回族自治区"
+      ],
+      "provinceEn": "Ningxia"
+    },
+    {
+      "id": "bo-zhou",
+      "zh": "亳州",
+      "en": "BoZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "安徽省",
+      "lat": 33.8506,
+      "lon": 115.7845,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "亳州",
+        "安徽省"
+      ],
+      "provinceEn": "Anhui"
+    },
+    {
+      "id": "lu-an",
+      "zh": "六安",
+      "en": "LuAn City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "安徽省",
+      "lat": 31.7415,
+      "lon": 116.5264,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "六安",
+        "安徽省"
+      ],
+      "provinceEn": "Anhui"
+    },
+    {
+      "id": "an-qing",
+      "zh": "安庆",
+      "en": "AnQing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "安徽省",
+      "lat": 30.531,
+      "lon": 117.0636,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "安庆",
+        "安徽省"
+      ],
+      "provinceEn": "Anhui"
+    },
+    {
+      "id": "xuan-cheng",
+      "zh": "宣城",
+      "en": "XuanCheng City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "安徽省",
+      "lat": 30.9466,
+      "lon": 118.7655,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宣城",
+        "安徽省"
+      ],
+      "provinceEn": "Anhui"
+    },
+    {
+      "id": "su-zhou",
+      "zh": "宿州",
+      "en": "SuZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "安徽省",
+      "lat": 33.6521,
+      "lon": 116.9705,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宿州",
+        "安徽省"
+      ],
+      "provinceEn": "Anhui"
+    },
+    {
+      "id": "dong-ying",
+      "zh": "东营",
+      "en": "DongYing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "山东省",
+      "lat": 37.4396,
+      "lon": 118.6814,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "东营",
+        "山东省"
+      ],
+      "provinceEn": "Shandong"
+    },
+    {
+      "id": "lin-yi",
+      "zh": "临沂",
+      "en": "LinYi City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "山东省",
+      "lat": 35.1107,
+      "lon": 118.3635,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "临沂",
+        "山东省"
+      ],
+      "provinceEn": "Shandong"
+    },
+    {
+      "id": "wei-hai",
+      "zh": "威海",
+      "en": "WeiHai City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "山东省",
+      "lat": 37.5164,
+      "lon": 122.1275,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "威海",
+        "山东省"
+      ],
+      "provinceEn": "Shandong"
+    },
+    {
+      "id": "de-zhou",
+      "zh": "德州",
+      "en": "DeZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "山东省",
+      "lat": 37.4413,
+      "lon": 116.3656,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "德州",
+        "山东省"
+      ],
+      "provinceEn": "Shandong"
+    },
+    {
+      "id": "lin-fen",
+      "zh": "临汾",
+      "en": "LinFen City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "山西省",
+      "lat": 36.0937,
+      "lon": 111.5255,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "临汾",
+        "山西省"
+      ],
+      "provinceEn": "Shanxi"
+    },
+    {
+      "id": "lv-liang",
+      "zh": "吕梁",
+      "en": "LvLiang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "山西省",
+      "lat": 37.5245,
+      "lon": 111.1504,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "吕梁",
+        "山西省"
+      ],
+      "provinceEn": "Shanxi"
+    },
+    {
+      "id": "da-tong",
+      "zh": "大同",
+      "en": "DaTong City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "山西省",
+      "lat": 40.0825,
+      "lon": 113.3064,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "大同",
+        "山西省"
+      ],
+      "provinceEn": "Shanxi"
+    },
+    {
+      "id": "xin-zhou",
+      "zh": "忻州",
+      "en": "XinZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "山西省",
+      "lat": 38.4224,
+      "lon": 112.7406,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "忻州",
+        "山西省"
+      ],
+      "provinceEn": "Shanxi"
+    },
+    {
+      "id": "zhong-shan",
+      "zh": "中山",
+      "en": "ZhongShan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广东省",
+      "lat": 22.5223,
+      "lon": 113.3994,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "中山",
+        "广东省"
+      ],
+      "provinceEn": "Guangdong"
+    },
+    {
+      "id": "yun-fu",
+      "zh": "云浮",
+      "en": "YunFu City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广东省",
+      "lat": 22.9209,
+      "lon": 112.0515,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "云浮",
+        "广东省"
+      ],
+      "provinceEn": "Guangdong"
+    },
+    {
+      "id": "hui-zhou",
+      "zh": "惠州",
+      "en": "HuiZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广东省",
+      "lat": 23.1164,
+      "lon": 114.4236,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "惠州",
+        "广东省"
+      ],
+      "provinceEn": "Guangdong"
+    },
+    {
+      "id": "bei-hai",
+      "zh": "北海",
+      "en": "BeiHai City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 21.4868,
+      "lon": 109.1265,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "北海",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "chong-zuo",
+      "zh": "崇左",
+      "en": "ChongZuo City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 22.3831,
+      "lon": 107.3715,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "崇左",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "lai-bin",
+      "zh": "来宾",
+      "en": "LaiBin City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 23.7565,
+      "lon": 109.2275,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "来宾",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "liu-zhou",
+      "zh": "柳州",
+      "en": "LiuZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 24.332,
+      "lon": 109.4344,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "柳州",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "gui-lin",
+      "zh": "桂林",
+      "en": "GuiLin City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 25.2429,
+      "lon": 110.2035,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "桂林",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "wu-zhou",
+      "zh": "梧州",
+      "en": "WuZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 23.4827,
+      "lon": 111.2855,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "梧州",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "he-chi",
+      "zh": "河池",
+      "en": "HeChi City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 24.6989,
+      "lon": 108.0915,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "河池",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "yu-lin",
+      "zh": "玉林",
+      "en": "YuLin City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 22.6598,
+      "lon": 110.1885,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "玉林",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "bai-se",
+      "zh": "百色",
+      "en": "BaiSe City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 23.9082,
+      "lon": 106.6246,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "百色",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "gui-gang",
+      "zh": "贵港",
+      "en": "GuiGang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 23.1174,
+      "lon": 109.6055,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "贵港",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "he-zhou",
+      "zh": "贺州",
+      "en": "HeZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 24.4095,
+      "lon": 111.5735,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "贺州",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "qin-zhou",
+      "zh": "钦州",
+      "en": "QinZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 21.9866,
+      "lon": 108.6606,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "钦州",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "fang-cheng-gang",
+      "zh": "防城港",
+      "en": "FangChengGang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "广西壮族自治区",
+      "lat": 21.693,
+      "lon": 108.3604,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "防城港",
+        "广西壮族自治区"
+      ],
+      "provinceEn": "Guangxi"
+    },
+    {
+      "id": "ha-mi",
+      "zh": "哈密",
+      "en": "HaMi City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "新疆维吾尔自治区",
+      "lat": 42.8258,
+      "lon": 93.5212,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "哈密",
+        "新疆维吾尔自治区"
+      ],
+      "provinceEn": "Xinjiang"
+    },
+    {
+      "id": "nan-tong",
+      "zh": "南通",
+      "en": "NanTong City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江苏省",
+      "lat": 31.9865,
+      "lon": 120.9016,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "南通",
+        "江苏省"
+      ],
+      "provinceEn": "Jiangsu"
+    },
+    {
+      "id": "su-qian",
+      "zh": "宿迁",
+      "en": "SuQian City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江苏省",
+      "lat": 33.9677,
+      "lon": 118.2816,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宿迁",
+        "江苏省"
+      ],
+      "provinceEn": "Jiangsu"
+    },
+    {
+      "id": "chang-zhou",
+      "zh": "常州",
+      "en": "ChangZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江苏省",
+      "lat": 31.8158,
+      "lon": 119.9815,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "常州",
+        "江苏省"
+      ],
+      "provinceEn": "Jiangsu"
+    },
+    {
+      "id": "xu-zhou",
+      "zh": "徐州",
+      "en": "XuZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江苏省",
+      "lat": 34.2127,
+      "lon": 117.2906,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "徐州",
+        "江苏省"
+      ],
+      "provinceEn": "Jiangsu"
+    },
+    {
+      "id": "yang-zhou",
+      "zh": "扬州",
+      "en": "YangZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江苏省",
+      "lat": 32.4007,
+      "lon": 119.4194,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "扬州",
+        "江苏省"
+      ],
+      "provinceEn": "Jiangsu"
+    },
+    {
+      "id": "shang-rao",
+      "zh": "上饶",
+      "en": "ShangRao City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江西省",
+      "lat": 28.4606,
+      "lon": 117.9495,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "上饶",
+        "江西省"
+      ],
+      "provinceEn": "Jiangxi"
+    },
+    {
+      "id": "jiu-jiang",
+      "zh": "九江",
+      "en": "JiuJiang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江西省",
+      "lat": 29.7113,
+      "lon": 116.0075,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "九江",
+        "江西省"
+      ],
+      "provinceEn": "Jiangxi"
+    },
+    {
+      "id": "ji-an",
+      "zh": "吉安",
+      "en": "JiAn City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江西省",
+      "lat": 27.1197,
+      "lon": 115.0005,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "吉安",
+        "江西省"
+      ],
+      "provinceEn": "Jiangxi"
+    },
+    {
+      "id": "yi-chun",
+      "zh": "宜春",
+      "en": "YiChun City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "江西省",
+      "lat": 27.8209,
+      "lon": 114.4236,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宜春",
+        "江西省"
+      ],
+      "provinceEn": "Jiangxi"
+    },
+    {
+      "id": "bao-ding",
+      "zh": "保定",
+      "en": "BaoDing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "河北省",
+      "lat": 38.88,
+      "lon": 115.4715,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "保定",
+        "河北省"
+      ],
+      "provinceEn": "Hebei"
+    },
+    {
+      "id": "tang-shan",
+      "zh": "唐山",
+      "en": "TangShan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "河北省",
+      "lat": 39.6366,
+      "lon": 118.1865,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "唐山",
+        "河北省"
+      ],
+      "provinceEn": "Hebei"
+    },
+    {
+      "id": "lang-fang",
+      "zh": "廊坊",
+      "en": "LangFang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "河北省",
+      "lat": 39.5434,
+      "lon": 116.6906,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "廊坊",
+        "河北省"
+      ],
+      "provinceEn": "Hebei"
+    },
+    {
+      "id": "cheng-de",
+      "zh": "承德",
+      "en": "ChengDe City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华北",
+      "province": "河北省",
+      "lat": 40.9579,
+      "lon": 117.9694,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "承德",
+        "河北省"
+      ],
+      "provinceEn": "Hebei"
+    },
+    {
+      "id": "xin-yang",
+      "zh": "信阳",
+      "en": "XinYang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "河南省",
+      "lat": 32.153,
+      "lon": 114.0975,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "信阳",
+        "河南省"
+      ],
+      "provinceEn": "Henan"
+    },
+    {
+      "id": "nan-yang",
+      "zh": "南阳",
+      "en": "NanYang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "河南省",
+      "lat": 32.9966,
+      "lon": 112.5345,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "南阳",
+        "河南省"
+      ],
+      "provinceEn": "Henan"
+    },
+    {
+      "id": "zhou-kou",
+      "zh": "周口",
+      "en": "ZhouKou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "河南省",
+      "lat": 33.6318,
+      "lon": 114.7035,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "周口",
+        "河南省"
+      ],
+      "provinceEn": "Henan"
+    },
+    {
+      "id": "shang-qiu",
+      "zh": "商丘",
+      "en": "ShangQiu City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "河南省",
+      "lat": 34.4202,
+      "lon": 115.6624,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "商丘",
+        "河南省"
+      ],
+      "provinceEn": "Henan"
+    },
+    {
+      "id": "an-yang",
+      "zh": "安阳",
+      "en": "AnYang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "河南省",
+      "lat": 36.1059,
+      "lon": 114.3995,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "安阳",
+        "河南省"
+      ],
+      "provinceEn": "Henan"
+    },
+    {
+      "id": "kai-feng",
+      "zh": "开封",
+      "en": "KaiFeng City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "河南省",
+      "lat": 34.8029,
+      "lon": 114.3146,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "开封",
+        "河南省"
+      ],
+      "provinceEn": "Henan"
+    },
+    {
+      "id": "li-shui",
+      "zh": "丽水",
+      "en": "LiShui City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "浙江省",
+      "lat": 28.4733,
+      "lon": 119.9296,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "丽水",
+        "浙江省"
+      ],
+      "provinceEn": "Zhejiang"
+    },
+    {
+      "id": "tai-zhou",
+      "zh": "台州",
+      "en": "TaiZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "浙江省",
+      "lat": 28.6622,
+      "lon": 121.4274,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "台州",
+        "浙江省"
+      ],
+      "provinceEn": "Zhejiang"
+    },
+    {
+      "id": "jia-xing",
+      "zh": "嘉兴",
+      "en": "JiaXing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "浙江省",
+      "lat": 30.751,
+      "lon": 120.7636,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "嘉兴",
+        "浙江省"
+      ],
+      "provinceEn": "Zhejiang"
+    },
+    {
+      "id": "san-ya",
+      "zh": "三亚",
+      "en": "SanYa City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "海南省",
+      "lat": 18.2587,
+      "lon": 109.5186,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "三亚",
+        "海南省"
+      ],
+      "provinceEn": "Hainan"
+    },
+    {
+      "id": "san-sha",
+      "zh": "三沙",
+      "en": "SanSha City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "海南省",
+      "lat": 30.3166,
+      "lon": 112.2616,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "三沙",
+        "海南省"
+      ],
+      "provinceEn": "Hainan"
+    },
+    {
+      "id": "dan-zhou",
+      "zh": "儋州",
+      "en": "DanZhou City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华南",
+      "province": "海南省",
+      "lat": 19.6428,
+      "lon": 109.174,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "儋州",
+        "海南省"
+      ],
+      "provinceEn": "Hainan"
+    },
+    {
+      "id": "shi-yan",
+      "zh": "十堰",
+      "en": "ShiYan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖北省",
+      "lat": 32.6351,
+      "lon": 110.8045,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "十堰",
+        "湖北省"
+      ],
+      "provinceEn": "Hubei"
+    },
+    {
+      "id": "xian-ning",
+      "zh": "咸宁",
+      "en": "XianNing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖北省",
+      "lat": 29.8471,
+      "lon": 114.3285,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "咸宁",
+        "湖北省"
+      ],
+      "provinceEn": "Hubei"
+    },
+    {
+      "id": "xiao-gan",
+      "zh": "孝感",
+      "en": "XiaoGan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖北省",
+      "lat": 30.9307,
+      "lon": 113.9225,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "孝感",
+        "湖北省"
+      ],
+      "provinceEn": "Hubei"
+    },
+    {
+      "id": "yi-chang",
+      "zh": "宜昌",
+      "en": "YiChang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖北省",
+      "lat": 30.6974,
+      "lon": 111.2925,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宜昌",
+        "湖北省"
+      ],
+      "provinceEn": "Hubei"
+    },
+    {
+      "id": "lou-di",
+      "zh": "娄底",
+      "en": "LouDi City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖南省",
+      "lat": 27.7032,
+      "lon": 112.0015,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "娄底",
+        "湖南省"
+      ],
+      "provinceEn": "Hunan"
+    },
+    {
+      "id": "yue-yang",
+      "zh": "岳阳",
+      "en": "YueYang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖南省",
+      "lat": 29.3632,
+      "lon": 113.1355,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "岳阳",
+        "湖南省"
+      ],
+      "provinceEn": "Hunan"
+    },
+    {
+      "id": "chang-de",
+      "zh": "常德",
+      "en": "ChangDe City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖南省",
+      "lat": 29.0377,
+      "lon": 111.7055,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "常德",
+        "湖南省"
+      ],
+      "provinceEn": "Hunan"
+    },
+    {
+      "id": "huai-hua",
+      "zh": "怀化",
+      "en": "HuaiHua City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华中",
+      "province": "湖南省",
+      "lat": 27.5752,
+      "lon": 110.0085,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "怀化",
+        "湖南省"
+      ],
+      "provinceEn": "Hunan"
+    },
+    {
+      "id": "tian-shui",
+      "zh": "天水",
+      "en": "TianShui City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "甘肃省",
+      "lat": 34.5874,
+      "lon": 105.7314,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "天水",
+        "甘肃省"
+      ],
+      "provinceEn": "Gansu"
+    },
+    {
+      "id": "ding-xi",
+      "zh": "定西",
+      "en": "DingXi City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "甘肃省",
+      "lat": 35.5868,
+      "lon": 104.6324,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "定西",
+        "甘肃省"
+      ],
+      "provinceEn": "Gansu"
+    },
+    {
+      "id": "ping-liang",
+      "zh": "平凉",
+      "en": "PingLiang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "甘肃省",
+      "lat": 35.5492,
+      "lon": 106.6714,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "平凉",
+        "甘肃省"
+      ],
+      "provinceEn": "Gansu"
+    },
+    {
+      "id": "qing-yang",
+      "zh": "庆阳",
+      "en": "QingYang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "甘肃省",
+      "lat": 35.7152,
+      "lon": 107.6494,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "庆阳",
+        "甘肃省"
+      ],
+      "provinceEn": "Gansu"
+    },
+    {
+      "id": "zhang-ye",
+      "zh": "张掖",
+      "en": "ZhangYe City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "甘肃省",
+      "lat": 38.9321,
+      "lon": 100.4564,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "张掖",
+        "甘肃省"
+      ],
+      "provinceEn": "Gansu"
+    },
+    {
+      "id": "san-ming",
+      "zh": "三明",
+      "en": "SanMing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "福建省",
+      "lat": 26.2697,
+      "lon": 117.6455,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "三明",
+        "福建省"
+      ],
+      "provinceEn": "Fujian"
+    },
+    {
+      "id": "nan-ping",
+      "zh": "南平",
+      "en": "NanPing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "福建省",
+      "lat": 26.6478,
+      "lon": 118.1844,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "南平",
+        "福建省"
+      ],
+      "provinceEn": "Fujian"
+    },
+    {
+      "id": "ning-de",
+      "zh": "宁德",
+      "en": "NingDe City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "华东",
+      "province": "福建省",
+      "lat": 26.6722,
+      "lon": 119.5545,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宁德",
+        "福建省"
+      ],
+      "provinceEn": "Fujian"
+    },
+    {
+      "id": "shan-nan",
+      "zh": "山南",
+      "en": "ShanNan City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "西藏自治区",
+      "lat": 29.243,
+      "lon": 91.7787,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "山南",
+        "西藏自治区"
+      ],
+      "provinceEn": "Tibet"
+    },
+    {
+      "id": "an-shun",
+      "zh": "安顺",
+      "en": "AnShun City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西南",
+      "province": "贵州省",
+      "lat": 26.2593,
+      "lon": 105.9544,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "安顺",
+        "贵州省"
+      ],
+      "provinceEn": "Guizhou"
+    },
+    {
+      "id": "dan-dong",
+      "zh": "丹东",
+      "en": "DanDong City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "东北",
+      "province": "辽宁省",
+      "lat": 40.0064,
+      "lon": 124.3615,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "丹东",
+        "辽宁省"
+      ],
+      "provinceEn": "Liaoning"
+    },
+    {
+      "id": "xian-yang",
+      "zh": "咸阳",
+      "en": "XianYang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "陕西省",
+      "lat": 34.3355,
+      "lon": 108.7154,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "咸阳",
+        "陕西省"
+      ],
+      "provinceEn": "Shaanxi"
+    },
+    {
+      "id": "shang-luo",
+      "zh": "商洛",
+      "en": "ShangLuo City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "陕西省",
+      "lat": 33.8786,
+      "lon": 109.9244,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "商洛",
+        "陕西省"
+      ],
+      "provinceEn": "Shaanxi"
+    },
+    {
+      "id": "an-kang",
+      "zh": "安康",
+      "en": "AnKang City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "陕西省",
+      "lat": 32.6905,
+      "lon": 109.0356,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "安康",
+        "陕西省"
+      ],
+      "provinceEn": "Shaanxi"
+    },
+    {
+      "id": "bao-ji",
+      "zh": "宝鸡",
+      "en": "BaoJi City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "陕西省",
+      "lat": 34.3689,
+      "lon": 107.2446,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "宝鸡",
+        "陕西省"
+      ],
+      "provinceEn": "Shaanxi"
+    },
+    {
+      "id": "yan-an",
+      "zh": "延安",
+      "en": "YanAn City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "西北",
+      "province": "陕西省",
+      "lat": 36.5911,
+      "lon": 109.4966,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "延安",
+        "陕西省"
+      ],
+      "provinceEn": "Shaanxi"
+    },
+    {
+      "id": "yi-chun-hljs",
+      "zh": "伊春",
+      "en": "YiChun City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "东北",
+      "province": "黑龙江省",
+      "lat": 47.7333,
+      "lon": 128.8475,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "伊春",
+        "黑龙江省"
+      ],
+      "provinceEn": "Heilongjiang"
+    },
+    {
+      "id": "da-qing",
+      "zh": "大庆",
+      "en": "DaQing City",
+      "country": "中国",
+      "countryEn": "China",
+      "region": "东北",
+      "province": "黑龙江省",
+      "lat": 46.5936,
+      "lon": 125.1087,
+      "timezone": "Asia/Shanghai",
+      "keywords": [
+        "大庆",
+        "黑龙江省"
+      ],
+      "provinceEn": "Heilongjiang"
     }
   ]
 }

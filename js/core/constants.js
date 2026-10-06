@@ -3,9 +3,16 @@
 
 export const VERSION = '1.0.0';
 
-/** 一次「浏览」连续播报的城市卡片数量（每城一天），国内优先，保证孩子能听到家乡。 */
-export const CN_QUOTA = 12;
-export const INTL_QUOTA = 8;
+/**
+ * 一轮播报的城市数量。
+ *
+ * ★ 老板决定：「不要搞什么一轮配额，直接全额随机」——
+ *   所以**不再区分国内/国外**（原来的 CN_QUOTA=12 + INTL_QUOTA=8 已废弃）。
+ *   国内城市已扩充到 143 座（含 100 个新增地级市），再按配额分国内外反而让
+ *   "随机"变成"每轮固定 12 个国内"，与老板要的全额随机相悖。
+ *   现在就是：从全部城市里洗牌，取前 CARDS_PER_PASS 个。
+ */
+export const CARDS_PER_PASS = 20;
 export const CARDS_PER_CITY = 1;
 
 /** 天气取未来第几天：0=今天, 1=明天, 2=后天 */

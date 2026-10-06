@@ -1,6 +1,6 @@
 // 一次「浏览」的城市挑选与卡片构造。
 // 需求：每次打开网页都重新随机 —— 城市随机、顺序随机、每城随机挑一天。
-import { CARDS_PER_CITY, FORECAST_DAYS, FORECAST_DAYS_OUT, CN_QUOTA, INTL_QUOTA } from './constants.js';
+import { CARDS_PER_CITY, CARDS_PER_PASS, FORECAST_DAYS, FORECAST_DAYS_OUT } from './constants.js';
 import { shuffled, randInt } from './utils.js';
 import { dailyToDays } from './weather.js';
 
@@ -9,24 +9,23 @@ export function isDomestic(city) {
 }
 
 /**
- * 组成一次浏览的城市队列：国内优先保证「家乡感」，再掺入国际城市。
- * 当某一边不够时，用另一边补足，保证总数稳定。
+ * 组成一次浏览的城市队列：**全额随机**。
+ *
+ * ★ 老板明确要求「不要搞什么一轮配额，直接全额随机」，
+ *   所以这里就是「洗牌后取前 N 个」——不再区分国内/国外，
+ *   也不再保证"每轮有 N 个国内城市"。国内外城市一视同仁，
+ *   谁被抽到看概率（国内 143 : 国外 38，约 79% 是国内）。
+ *
+ * ⚠ 历史上的 CN_QUOTA / INTL_QUOTA 配额已废弃，不要再加回来：
+ *   国内城市扩充到 143 座之后，固定"每轮 12 个国内"会让绝大部分城市永远轮不到。
+ *
+ * @param {Array} cities 全部城市
+ * @param {Object} opts { count } 一轮取多少座
  */
-export function pickCities(cities, { cnQuota = CN_QUOTA, intlQuota = INTL_QUOTA } = {}) {
-  const cn = shuffled(cities.filter(isDomestic));
-  const intl = shuffled(cities.filter((c) => !isDomestic(c)));
-  const target = Math.min(cities.length, cnQuota + intlQuota);
-
-  const takeCn = Math.min(cn.length, cnQuota);
-  const takeIntl = Math.min(intl.length, intlQuota);
-  const picked = [...cn.slice(0, takeCn), ...intl.slice(0, takeIntl)];
-
-  // 数量不足目标时，从剩余城市补齐
-  if (picked.length < target) {
-    const rest = shuffled([...cn.slice(takeCn), ...intl.slice(takeIntl)]);
-    picked.push(...rest.slice(0, target - picked.length));
-  }
-  return shuffled(picked); // 打乱国内/国外的先后次序
+export function pickCities(cities, { count = CARDS_PER_PASS } = {}) {
+  const all = Array.isArray(cities) ? cities : [];
+  const n = Math.min(all.length, Math.max(1, count));
+  return shuffled(all).slice(0, n);
 }
 
 /**

@@ -387,6 +387,28 @@ button {
   to   { opacity: 1; transform: none; }
 }
 
+/* 地点小字：城市名上方，国内显示省份、国外显示国家名。
+   老板要求「小字、低对比度」——所以：
+     - 字号约为主块城市名的 1/8（1440 端约 17~22px）
+     - 用 --fg-2 再降透明度；0.62 在深色壁纸上仍能读清，又不抢城市名
+   仍然没有面板底色，直接压在壁纸上（继续遵守「零蒙版」红线）。 */
+#city-region {
+  margin: 0 0 clamp(2px, 0.6vh, 8px);
+  font-size: clamp(12px, 1.5vmin, 22px);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--fg-2);
+  opacity: 0.62;
+  text-shadow: var(--fg-shadow);
+}
+
+#city-region[hidden] { display: none; }
+
 /* 城市中文名：超大、不换行 */
 #city-zh {
   margin: 0;

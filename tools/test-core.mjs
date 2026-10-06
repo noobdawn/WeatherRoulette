@@ -61,7 +61,14 @@ check('城市 id 无重复', () => {
   }
 });
 check('id 只含安全字符（用于文件名与 URL）', () => {
-  for (const c of cities) assert.match(c.id, /^[a-z0-9]+$/, `${c.id} 含非法字符`);
+  // 允许短横线：扩充国内地级市后，id 改成拼音形式（lin-cang-shi、tai-zhou-shi-zj），
+  // 短横线在 URL 与文件名里都是安全字符，且可读性远好于把拼音连成一串。
+  // 仍然禁止：大写、下划线、空格、点、中文 —— 那些会在某些环境下出问题。
+  for (const c of cities) {
+    assert.match(c.id, /^[a-z0-9-]+$/, `${c.id} 含非法字符`);
+    assert.ok(!c.id.startsWith('-') && !c.id.endsWith('-'), `${c.id} 首尾不能是短横线`);
+    assert.ok(!c.id.includes('--'), `${c.id} 不能有连续短横线`);
+  }
 });
 check('国内城市与国外城市都有', () => {
   assert.ok(cities.filter(isDomestic).length >= 10, '国内城市太少');
@@ -179,19 +186,34 @@ check('所有天气码都能解析出中文词', () => {
 });
 
 console.log('\n[5] 卡片与播报文案');
-check('pickCities 每次结果不同且数量稳定', () => {
+check('pickCities 全额随机：每次结果不同、数量稳定、国内外都可出现', () => {
   const runs = [];
   for (let i = 0; i < 30; i++) runs.push(pickCities(cities).map((c) => c.id).join(','));
   assert.equal(new Set(runs).size, 30, '出现了完全相同的选城结果');
   const picked = pickCities(cities);
   assert.equal(picked.length, 20, `选城数量应为 20，实际 ${picked.length}`);
-  assert.ok(picked.filter(isDomestic).length >= 10, '国内城市配额不足');
-  assert.ok(picked.filter((c) => !isDomestic(c)).length >= 8, '国际城市配额不足');
+  // ★ 老板要求「不要搞什么一轮配额，直接全额随机」——
+  //   所以这里**不能**再断言"至少 N 个国内 / N 个国外"（那是配额时代的判据）。
+  //   改成：多跑几轮，国内外城市都应该出现过，证明两边都真的在参与随机。
+  const seenCn = new Set();
+  const seenIntl = new Set();
+  for (let i = 0; i < 60; i++) {
+    for (const c of pickCities(cities)) {
+      (isDomestic(c) ? seenCn : seenIntl).add(c.id);
+    }
+  }
+  assert.ok(seenCn.size > 0, '60 轮里一个国内城市都没抽到，随机有问题');
+  assert.ok(seenIntl.size > 0, '60 轮里一个国外城市都没抽到，随机有问题');
 });
-check('pickCities 城市不足时用另一边补足', () => {
-  const only = cities.filter(isDomestic).slice(0, 5);
+check('pickCities 城市数不足时按实际数量返回（不再有配额补足逻辑）', () => {
+  const only = cities.slice(0, 5);
   const picked = pickCities(only);
   assert.equal(picked.length, 5);
+  assert.equal(pickCities([], { count: 20 }).length, 0);
+});
+check('pickCities 的 count 可调，且不会超过城市总数', () => {
+  assert.equal(pickCities(cities, { count: 7 }).length, 7);
+  assert.equal(pickCities(cities, { count: 99999 }).length, cities.length);
 });
 check('buildCards 产出卡片，且日期标签与温度来自同一天', () => {
   const byCity = {};

@@ -38,6 +38,9 @@
          #forecast-list 的行由 screen.js 动态生成（行数 = FORECAST_DAYS_OUT） -->
     <main id="card" aria-live="polite">
       <div id="card-day" class="day-label"></div>
+      <!-- 地点小字：国内显示省份、国外显示国家名。低对比度、字号小，位于城市名上方。
+           数据由 js/core/format.js 的 locationLabel() 给出，screen.js 负责渲染。 -->
+      <p id="city-region"></p>
       <h1 id="city-zh"></h1>
       <p id="city-en"></p>
 

@@ -13,7 +13,7 @@
 //
 // js/ui/weather-icon.js 与 js/ui/assets.js 由队友并行开发：这里用惰性动态导入 + 兜底实现，
 // 保证任何一个还没就绪时页面都不会整块挂掉；两个模块就绪后自动用真实现。
-import { dayLabel, dayLabelEn, toF, tempC, weatherOf } from '../core/format.js';
+import { dayLabel, dayLabelEn, toF, tempC, weatherOf, locationLabel } from '../core/format.js';
 import { ICON_LABELS } from '../core/constants.js';
 import { isDaytime, localTime } from '../core/utils.js';
 
@@ -328,6 +328,16 @@ export class Screen {
 
     this.#text('city-zh', c.zh ?? '');
     this.#text('city-en', c.en ?? '');
+    // 城市名上方的小字：国内显示省份、国外显示国家名（低对比度，见 style.css）
+    const loc = locationLabel(c);
+    const regionEl = this.#node('city-region');
+    if (regionEl) {
+      const zh = loc.zh || '';
+      const en = loc.en || '';
+      regionEl.textContent = zh && en ? `${zh} ${en}` : (zh || en);
+      // 两个字段都拿不到时隐藏整行，不留空白占位
+      regionEl.hidden = !regionEl.textContent;
+    }
     this.#text('weather-zh', weather.zh ?? '');
     this.#text('weather-en', weather.en ?? '');
     this.#text('card-day', `${dayLabel(dayIndex)} ${dayLabelEn(dayIndex)}`);

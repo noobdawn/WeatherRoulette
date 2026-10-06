@@ -135,11 +135,24 @@ const check = (name, ok, detail = '') => {
   else { failed++; console.log(`  ✗ ${name}${detail ? `  — ${detail}` : ''}`); }
 };
 
+// ★ 只考核「配了壁纸」的城市。
+//   国内城市扩充到 143 座后，有 100 座新城市按计划**暂时没有壁纸**
+//   （老板决定「先上数据与语音，壁纸后补」），它们走首字插画兜底 ——
+//   插画是纯色渐变，不存在"文字压在照片上看不清"的问题，因此不参与配色考核。
+//   这些城市补上壁纸后，重新跑 precompute-luminance.py 就会自动纳入考核。
+const citiesWithImage = cities.filter((c) => Boolean(manifest.images[c.id]?.primary));
+const citiesWithoutImage = cities.filter((c) => !manifest.images[c.id]?.primary);
+
 console.log(`[1] 数据完整性`);
-check('亮度网格覆盖清单里的每一张主图', cities.every((c) => lum.cells[manifest.images[c.id]?.primary]),
-  `${Object.keys(lum.cells).length} 条网格 / ${cities.length} 个城市`);
+check('亮度网格覆盖清单里的每一张主图',
+  citiesWithImage.every((c) => lum.cells[manifest.images[c.id]?.primary]),
+  `${Object.keys(lum.cells).length} 条网格 / ${citiesWithImage.length} 个有壁纸的城市`
+  + `（另有 ${citiesWithoutImage.length} 个城市暂无壁纸，走插画兜底，不参与配色考核）`);
 check('网格尺寸与声明一致', Object.values(lum.cells).every((c) => c.length === GW * GH),
   `${GW}×${GH}=${GW * GH}`);
+check('无壁纸城市确实没有亮度网格（说明统计口径一致，而不是网格缺了一半）',
+  citiesWithoutImage.every((c) => !lum.cells[manifest.images[c.id]?.primary]),
+  `${citiesWithoutImage.length} 个`);
 
 console.log('\n[2] 逐城逐视口判定文字配色');
 const rawWorst = { ratio: 0, city: '', vp: '' };
@@ -149,7 +162,7 @@ const summary = {};
 for (const vp of VIEWPORTS) {
   let light = 0;
   let dark = 0;
-  for (const city of cities) {
+  for (const city of citiesWithImage) {
     const primary = manifest.images[city.id]?.primary;
     const cells = lum.cells[primary];
     if (!cells) { undecided.push(`${city.id}(${vp.name})`); continue; }
@@ -196,15 +209,18 @@ for (const vp of VIEWPORTS) {
   summary[vp.name] = { light, dark };
   console.log(`  ${vp.name}：深墨字 ${light} 城 / 白字 ${dark} 城`);
 }
-check('81 城 × 3 视口全部给出了明确配色', undecided.length === 0,
-  undecided.length ? `${undecided.length} 项无决策：${undecided.slice(0, 6).join(', ')}` : '243 项全有决策');
+const vpCount = citiesWithImage.length * VIEWPORTS.length;
+check(`${citiesWithImage.length} 城（有壁纸的）× ${VIEWPORTS.length} 视口全部给出了明确配色`, undecided.length === 0,
+  undecided.length ? `${undecided.length} 项无决策：${undecided.slice(0, 6).join(', ')}`
+    : `${vpCount} 项全有决策`);
 
 console.log('\n[3] 可读性红线（按真实渲染：文字色 vs 描边合成后的背景）');
 console.log(`  · 只看纯色（不带描边）最差：${rawWorst.city} @ ${rawWorst.vp} 有 ${(rawWorst.ratio * 100).toFixed(1)}% 区域 <3:1`);
 console.log('    这一项天生无法为 0：单色文字压在明暗混合的壁纸上必然局部吃亏，');
 console.log('    所以可读性不能只靠选颜色，必须靠下面这条。');
 console.log(`  · 带内嵌描边后，所有城市所有区域 ≥4.5:1（最差一城的越界占比 ${(haloWorst.ratio * 100).toFixed(1)}%）`);
-check('带内嵌 halo 后，全 81 城 × 3 视口都达到大字 4.5:1 标准', haloWorst.ratio === 0,
+check(`带内嵌 halo 后，全 ${citiesWithImage.length} 城（有壁纸的）× ${VIEWPORTS.length} 视口都达到大字 4.5:1 标准`,
+  haloWorst.ratio === 0,
   haloWorst.ratio === 0 ? '全部达标' : `最差 ${haloWorst.city} @ ${haloWorst.vp} 仍有 ${(haloWorst.ratio * 100).toFixed(1)}% 越界`);
 check('纯色下界也有个底（加权看不清区域 < 60%）', rawWorst.ratio < 0.6,
   `最差 ${(rawWorst.ratio * 100).toFixed(1)}%`);

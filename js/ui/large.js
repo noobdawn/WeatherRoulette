@@ -9,7 +9,7 @@
 // ============================================================================
 
 import { localTime, isDaytime } from '../core/utils.js';
-import { dayLabel, dayLabelEn, toF } from '../core/format.js';
+import { dayLabel, dayLabelEn, toF, locationLabel } from '../core/format.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** 进度点阵一次最多显示多少个点（城市多于此时用滑动窗口） */
@@ -172,6 +172,7 @@ export class LargeScreen {
       bgB: byId(root, 'lg-bg-b'),
       bgFallbackChar: byId(root, 'lg-bg-fallback-char'),
       cityZh: byId(root, 'lg-city-zh'),
+      cityRegion: byId(root, 'lg-city-region'),
       cityEn: byId(root, 'lg-city-en'),
       dayZh: byId(root, 'lg-day-zh'),
       dayEn: byId(root, 'lg-day-en'),
@@ -322,6 +323,13 @@ export class LargeScreen {
     const zh = city.zh ?? '';
     setText(this.nodes.cityZh, zh);
     app.style.setProperty('--lg-chars', String(Math.max(1, [...zh].length)));
+
+    // 城市名上方的地点小字：国内显示省份、国外显示国家名（与极简版口径一致，
+    // 复用 js/core/format.js 的 locationLabel()，两套界面不各写一份）
+    const loc = locationLabel(city);
+    const locText = loc.zh && loc.en ? `${loc.zh} ${loc.en}` : (loc.zh || loc.en);
+    setText(this.nodes.cityRegion, locText);
+    if (this.nodes.cityRegion) this.nodes.cityRegion.hidden = !locText;
 
     const en = city.en ?? '';
     setText(this.nodes.cityEn, en);

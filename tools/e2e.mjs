@@ -365,6 +365,8 @@ const snapshot = await session.eval(`(() => {
     // 极简版必须没有这些：整屏蒙版、进度条、播放控制、华氏度、当地时间、风速
     removed: ['temp-f', 'progress-track', 'progress-fill', 'hud', 'meta-row', 'btn-play', 'btn-next', 'btn-prev', 'btn-shuffle', 'local-time', 'precip', 'wind']
       .filter((id) => document.getElementById(id)),
+    // 当前城市的 id（用于「该城有没有配壁纸」这类需要查数据的断言）
+    cityId: window.__wr?.cityId ?? null,
   };
 })()`);
 
@@ -506,6 +508,72 @@ if (!isLarge) {
     check('预报行不含华氏度（老板要求移除）',
       fc.rows.every((r) => !r.range.includes('°F')),
       fc.rows.map((r) => r.range).join(' | '));
+  }
+}
+
+// ---- 地点小字：国内显示省份、国外显示国家名 ----
+if (!isLarge) {
+  const region = await session.eval(`(async () => {
+    const el = document.getElementById('city-region');
+    if (!el) return { missing: true };
+    const cs = getComputedStyle(el);
+    const cityEl = document.getElementById('city-zh');
+    const cityRect = cityEl.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    // ★ 城市数据要以 **DOM 上显示的城市名** 为准去查，不能用 window.__wr.city：
+    //   卡片切换是异步的，__wr.city 与 DOM 可能不在同一时刻
+    //   （实测出现过 DOM 显示「山东」而 __wr.city 还是「德州」的读数不一致）。
+    const cityZh = (cityEl.textContent ?? '').trim();
+    const raw = await (await fetch('/data/cities.json')).json();
+    const all = raw.cities ?? raw;
+    const c = all.find((x) => x.zh === cityZh) ?? {};
+    return {
+      text: (el.textContent ?? '').trim(),
+      hidden: el.hidden || cs.display === 'none',
+      fontSize: parseFloat(cs.fontSize),
+      opacity: parseFloat(cs.opacity),
+      cityFs: parseFloat(getComputedStyle(cityEl).fontSize),
+      aboveCity: rect.top < cityRect.top,
+      regionBottom: rect.bottom,
+      cityTop: cityRect.top,
+      scrollW: document.documentElement.scrollWidth,
+      innerW: innerWidth,
+      cityZh,
+      country: c.country ?? null,
+      province: c.province ?? null,
+      countryEn: c.countryEn ?? null,
+    };
+  })()`);
+
+  check('城市名上方有地点小字（#city-region）', !region.missing && region.text.length > 0,
+    region.missing ? '节点不存在' : `文字 = "${region.text}"`);
+  if (!region.missing) {
+    check('地点小字在城市名上方', region.aboveCity && region.regionBottom <= region.cityTop + 2,
+      `region.bottom=${Math.round(region.regionBottom)} city.top=${Math.round(region.cityTop)}`);
+    check('地点小字字号明显小于城市名（≤ 1/4）', region.fontSize <= region.cityFs / 4,
+      `地点 ${region.fontSize.toFixed(1)}px vs 城市名 ${region.cityFs.toFixed(1)}px`);
+    check('地点小字是低对比度（opacity ≤ 0.75）', region.opacity <= 0.75,
+      `opacity=${region.opacity}`);
+    if (region.country === '中国') {
+      const prov = String(region.province ?? '');
+      const provCore = prov.replace(/市$/, '');
+      const cityCore = region.cityZh.replace(/市$/, '');
+      const isMuni = !prov || provCore === cityCore;
+      if (isMuni) {
+        check('直辖市的地点小字显示「中国」（不与城市名重复）',
+          region.text.includes('中国'), `${region.cityZh} → "${region.text}"`);
+      } else {
+        const short = prov.replace(/(特别行政区|维吾尔自治区|壮族自治区|回族自治区|自治区|省|市)$/, '');
+        check('国内城市的地点小字显示省份', region.text.includes(short),
+          `${region.cityZh} → province=${prov}，显示 "${region.text}"（期望含 ${short}）`);
+      }
+    } else {
+      check('国外城市的地点小字显示国家名',
+        region.text.includes(String(region.country ?? '')) || region.text.includes(String(region.countryEn ?? '')),
+        `${region.cityZh} → country=${region.country}，显示 "${region.text}"`);
+    }
+    check('地点小字不撑破布局', region.scrollW <= region.innerW + 2,
+      `scrollW=${region.scrollW}/${region.innerW}`);
   }
 }
 
@@ -968,9 +1036,65 @@ for (const [name, size] of [['desktop', [1440, 900]], ['mobile', [390, 844]]]) {
   console.log(`  ${name} 壁纸：已加载=${vis.loaded}（${vis.naturalW}px）夜间=${vis.night}`);
   console.log(`    filter=${vis.filter}`);
   console.log(`    src=${vis.src}`);
-  if (name === 'desktop') {
-    check('城市壁纸真的加载出来了（不是插画兜底）', vis.loaded && vis.naturalW > 400,
-      vis.loaded ? `${vis.naturalW}px` : '未加载，走了兜底');
+  if (name === 'desktop' && !isLarge) {
+    // ⚠ 这条断言必须**确定性**，不能"抽到有图的城市就算过"。
+    //   国内城市从 43 扩到 143 之后，有 100 座新城市**暂时没有壁纸**
+    //   （老板决定「先上数据与语音，壁纸后补」），它们会走首字插画兜底。
+    //   若断言写成「壁纸必须加载出来」，抽到缺图城市就会随机失败。
+    //   正确判据：**先问数据层这个城市该不该有图**，再检查画面是否符合预期。
+    const expect = await session.eval(`(async () => {
+      const mod = await import('/js/ui/assets.js');
+      const manifest = await mod.loadImageManifest();
+      const read = () => {
+        const id = window.__wr?.cityId ?? null;
+        const entry = id ? manifest?.images?.[id] : null;
+        const hasAny = Boolean(entry) && (
+          typeof entry === 'string' || Boolean(entry?.primary)
+          || (Array.isArray(entry?.fallbacks) && entry.fallbacks.length > 0)
+        );
+        const scene = document.getElementById('bg-scene');
+        return {
+          cityId: id,
+          cityZh: document.getElementById('city-zh')?.textContent?.trim() ?? '',
+          hasAny,
+          sceneVisible: Boolean(scene) && scene.classList.contains('is-fallback'),
+          dataChar: scene?.dataset?.char ?? null,
+          scrollW: document.documentElement.scrollWidth,
+          innerW: innerWidth,
+        };
+      };
+      // ★ 等画面稳定再判：卡片切换是异步的（背景探测 + 900ms 交叉淡入），
+      //   若在切换途中采样，会出现「cityId 是 A 城、画面还是 B 城」的错配，
+      //   断言随机失败（实测遇到过一次）。
+      //   稳定判据：配置与 cityId 都没变（要么有图、要么插画首字已对上），且卡片动画已结束。
+      let prevKey = null;
+      let stable = 0;
+      let last = read();
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 150));
+        last = read();
+        const settled = last.hasAny
+          ? true
+          : (last.sceneVisible && last.dataChar === last.cityZh.slice(0, 1));
+        const key = last.cityId + '|' + settled;
+        if (key === prevKey && settled) { stable++; if (stable >= 3) break; } else { stable = 0; }
+        prevKey = key;
+      }
+      return { ...last, stable, };
+    })()`).catch((err) => ({ evalError: err.message }));
+
+    if (expect.evalError) {
+      check('能查到当前城市是否配了壁纸', false, expect.evalError);
+    } else if (expect.hasAny) {
+      check('配了壁纸的城市确实加载出实景图（不是插画兜底）', vis.loaded && vis.naturalW > 400,
+        `${expect.cityZh}（${expect.cityId}）${vis.loaded ? `${vis.naturalW}px` : '未加载，走了兜底'}`);
+    } else {
+      check('没配壁纸的城市优雅降级为首字插画（不留白、不溢出）',
+        expect.sceneVisible && expect.dataChar === expect.cityZh.slice(0, 1)
+          && expect.scrollW <= expect.innerW + 2,
+        `${expect.cityZh} 兜底=${expect.sceneVisible} 首字=${expect.dataChar} `
+        + `scrollW=${expect.scrollW}/${expect.innerW}`);
+    }
   }
   const { data } = await session.send('Page.captureScreenshot', { format: 'png' });
   const file = path.join(SHOT_DIR, `${path.basename(page, '.html')}-${name}${FORCE_DAY ? '-day' : ''}.png`);
